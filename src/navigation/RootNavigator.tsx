@@ -1,121 +1,98 @@
 // src/navigation/RootNavigator.tsx
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import HomeScreen from '../screens/HomeScreen';
 import PlaceholderScreen from './PlaceholderScreen';
-import EvGuideScreen from '../screens/EvGuideScreen';
+import LoginScreen from '../screens/LoginScreen';
+import GarageScreen from '../screens/GarageScreen';
+import MainTabsNavigator from '../components/MainTabsNavigator';
 
-export type RootStackParamList = {
-  Home: undefined;
-  Search: undefined;
-  KronikSorun: undefined;
-  CompareDecision: undefined;
-  Brands: undefined;
-  Models: undefined;
-  Common: undefined;
-  Reviews: undefined;
-  ApiDocs: undefined;
-  FAQ: undefined;
-  Privacy: undefined;
-  Terms: undefined;
-  Cookies: undefined;
-  About: undefined;
-  Contact: undefined;
-  Changelog: undefined;
-  EvGuide: undefined;
-};
 
-const Stack = createNativeStackNavigator<RootStackParamList>();
+const Stack = createNativeStackNavigator();
 
 export default function RootNavigator() {
   return (
-    <Stack.Navigator>
+    <Stack.Navigator
+      initialRouteName="MainTabs"
+      screenOptions={{ headerShown: false }}
+    >
+      <Stack.Screen name="MainTabs" component={MainTabsNavigator} />
+
       <Stack.Screen
-        name="Home"
-        component={HomeScreen}
-        options={{ headerShown: false }}
+        name="Login"
+        component={LoginScreen}
+        options={{ headerShown: true, title: 'Giriş Yap' }}
       />
 
-      {/* Web’deki diğer sayfalar için şimdilik placeholder ekranlar */}
+      <Stack.Screen
+        name="Garage"
+        component={GarageScreen}
+        options={{ headerShown: true, title: 'Garajım' }}
+      />
+
       <Stack.Screen
         name="Search"
         component={PlaceholderScreen}
-        options={{ title: 'Bakım Arama' }}
-      />
-      <Stack.Screen
-        name="KronikSorun"
-        component={PlaceholderScreen}
-        options={{ title: 'Kronik Sorunlar' }}
+        options={{ headerShown: true, title: 'Bakım Arama' }}
       />
       <Stack.Screen
         name="CompareDecision"
         component={PlaceholderScreen}
-        options={{ title: 'Karşılaştırma' }}
+        options={{ headerShown: true, title: 'Karşılaştırma' }}
       />
-      <Stack.Screen
-  name="EvGuide"
-  component={EvGuideScreen}
-  options={{ title: 'Elektrikli Rehberi' }}
-/>
       <Stack.Screen
         name="Brands"
         component={PlaceholderScreen}
-        options={{ title: 'Markalar' }}
+        options={{ headerShown: true, title: 'Markalar' }}
       />
       <Stack.Screen
         name="Models"
         component={PlaceholderScreen}
-        options={{ title: 'Modeller' }}
+        options={{ headerShown: true, title: 'Modeller' }}
       />
       <Stack.Screen
         name="Common"
         component={PlaceholderScreen}
-        options={{ title: 'Bakım Rehberi' }}
+        options={{ headerShown: true, title: 'Bakım Rehberi' }}
       />
       <Stack.Screen
         name="Reviews"
         component={PlaceholderScreen}
-        options={{ title: 'Yorumlar' }}
+        options={{ headerShown: true, title: 'Yorumlar' }}
       />
       <Stack.Screen
         name="ApiDocs"
         component={PlaceholderScreen}
-        options={{ title: 'API Dokümanı' }}
-      />
-      <Stack.Screen
-        name="FAQ"
-        component={PlaceholderScreen}
-        options={{ title: 'SSS' }}
+        options={{ headerShown: true, title: 'API Dokümanı' }}
       />
       <Stack.Screen
         name="Privacy"
         component={PlaceholderScreen}
-        options={{ title: 'Gizlilik' }}
+        options={{ headerShown: true, title: 'Gizlilik' }}
       />
       <Stack.Screen
         name="Terms"
         component={PlaceholderScreen}
-        options={{ title: 'Kullanım Şartları' }}
+        options={{ headerShown: true, title: 'Kullanım Şartları' }}
       />
       <Stack.Screen
         name="Cookies"
         component={PlaceholderScreen}
-        options={{ title: 'Çerez Politikası' }}
+        options={{ headerShown: true, title: 'Çerez Politikası' }}
       />
       <Stack.Screen
         name="About"
         component={PlaceholderScreen}
-        options={{ title: 'Hikayemiz' }}
+        options={{ headerShown: true, title: 'Hikayemiz' }}
       />
       <Stack.Screen
         name="Contact"
         component={PlaceholderScreen}
-        options={{ title: 'İletişim' }}
+        options={{ headerShown: true, title: 'İletişim' }}
       />
       <Stack.Screen
         name="Changelog"
         component={PlaceholderScreen}
-        options={{ title: 'Sürüm Notları' }}
+        options={{ headerShown: true, title: 'Sürüm Notları' }}
       />
     </Stack.Navigator>
   );

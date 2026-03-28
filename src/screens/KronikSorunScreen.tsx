@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../lib/supabaseClient';
+import { useRoute } from '@react-navigation/native';
 
 // TypeScript Tür Tanımları
 type KronikSorun = {
@@ -135,6 +136,14 @@ function SelectBox({
  * Kronik Sorun Arama Ekranı
  */
 export default function KronikSorunScreen() {
+  const route = useRoute<any>();
+  const preset = (route.params ?? {}) as {
+    brand?: string;
+    model?: string;
+    year?: string;
+    motorTip?: string | null;
+  };
+
   const [keyword, setKeyword] = useState('');
   const [marka, setMarka] = useState('');
   const [model, setModel] = useState('');
@@ -198,7 +207,12 @@ export default function KronikSorunScreen() {
     fetchBrands();
   }, []);
 
-  // =============== MARKA SEÇİLİNCE MODELLER (araclar) ===============
+  useEffect(() => {
+    if (preset.brand && preset.model) {
+      onSearch();
+    }
+  }, [preset.brand, preset.model]);
+
   const handleBrandChange = async (value: string) => {
     setMarka(value);
     setModel('');

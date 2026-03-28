@@ -1,5 +1,5 @@
 // src/screens/SearchScreen.tsx
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -8,8 +8,11 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   ScrollView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Ionicons from 'react-native-vector-icons/Ionicons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../lib/supabaseClient';
 
 type BakimItem = {
@@ -46,7 +49,7 @@ function SelectBox({
 
   const handlePress = () => {
     if (disabled || loading) return;
-    setOpen((o) => !o);
+    setOpen((prev) => !prev);
   };
 
   const handleSelect = (val: string) => {
@@ -56,59 +59,69 @@ function SelectBox({
 
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={styles.fieldLabel}>{label}</Text>
 
       <TouchableOpacity
-        activeOpacity={0.8}
+        activeOpacity={0.9}
         onPress={handlePress}
         style={[
-          styles.selectBox,
-          (disabled || loading) && styles.selectBoxDisabled,
-          open && styles.selectBoxOpen,
+          styles.selectTrigger,
+          open && styles.selectTriggerOpen,
+          disabled && styles.selectTriggerDisabled,
         ]}
       >
         {loading ? (
-          <View style={styles.selectBoxLoading}>
-            <ActivityIndicator size="small" color="#1a1a1a" />
-            <Text style={styles.selectBoxLoadingText}>Yükleniyor...</Text>
+          <View style={styles.selectLoadingRow}>
+            <ActivityIndicator size="small" color="#2563EB" />
+            <Text style={styles.selectLoadingText}>Yükleniyor...</Text>
           </View>
         ) : (
           <>
             <Text
-              style={[
-                styles.selectBoxValue,
-                !value && styles.selectBoxPlaceholder,
-              ]}
               numberOfLines={1}
+              style={[styles.selectValue, !value && styles.selectPlaceholder]}
             >
               {value || placeholder}
             </Text>
-            <Text style={styles.selectBoxChevron}>{open ? '▲' : '▼'}</Text>
+            <Ionicons
+              name={open ? 'chevron-up' : 'chevron-down'}
+              size={18}
+              color="#64748B"
+            />
           </>
         )}
       </TouchableOpacity>
 
       {open && !loading && options.length > 0 && (
         <View style={styles.optionsPanel}>
-          <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled>
-            {options.map((opt) => (
-              <TouchableOpacity
-                key={opt}
-                onPress={() => handleSelect(opt)}
-                activeOpacity={0.7}
-                style={styles.optionItem}
-              >
-                <Text style={styles.optionText}>{opt}</Text>
-              </TouchableOpacity>
-            ))}
+          <ScrollView nestedScrollEnabled style={styles.optionsScroll}>
+            {options.map((opt) => {
+              const active = opt === value;
+
+              return (
+                <TouchableOpacity
+                  key={opt}
+                  activeOpacity={0.85}
+                  onPress={() => handleSelect(opt)}
+                  style={[styles.optionItem, active && styles.optionItemActive]}
+                >
+                  <Text style={[styles.optionText, active && styles.optionTextActive]}>
+                    {opt}
+                  </Text>
+                  {active ? (
+                    <Ionicons name="checkmark-circle" size={18} color="#2563EB" />
+                  ) : null}
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
         </View>
       )}
 
       {open && !loading && options.length === 0 && (
         <View style={styles.optionsPanel}>
-          <View style={[styles.optionItem, { paddingVertical: 16 }]}>
-            <Text style={styles.optionTextEmpty}>Seçenek bulunamadı</Text>
+          <View style={styles.emptyOption}>
+            <Text style={styles.emptyOptionText}>Seçenek bulunamadı</Text>
           </View>
         </View>
       )}
@@ -134,11 +147,11 @@ export default function SearchScreen() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [results, setResults] = useState<BakimItem[]>([]);
 
-  // Markaları çek
   useEffect(() => {
     const fetchBrands = async () => {
       try {
         setLoadingBrands(true);
+
         const { data, error } = await supabase
           .from('araclar')
           .select('marka')
@@ -152,8 +165,9 @@ export default function SearchScreen() {
           .filter((x: string) => x.length > 0);
 
         const unique = Array.from(new Set(raw)).sort((a, b) =>
-          a.localeCompare(b, 'tr'),
+          a.localeCompare(b, 'tr')
         );
+
         setBrandList(unique);
       } catch (e) {
         console.error('Marka listesi hatası:', e);
@@ -166,20 +180,20 @@ export default function SearchScreen() {
     fetchBrands();
   }, []);
 
-  // Marka değişince modelleri çek
   const handleBrandChange = async (value: string) => {
     setMarka(value);
     setModel('');
     setMotor('');
     setModelList([]);
     setMotorList([]);
-    setErrorMsg(null);
     setResults([]);
+    setErrorMsg(null);
 
     if (!value) return;
 
     try {
       setLoadingModels(true);
+
       const { data, error } = await supabase
         .from('araclar')
         .select('model')
@@ -194,8 +208,9 @@ export default function SearchScreen() {
         .filter((x: string) => x.length > 0);
 
       const unique = Array.from(new Set(raw)).sort((a, b) =>
-        a.localeCompare(b, 'tr'),
+        a.localeCompare(b, 'tr')
       );
+
       setModelList(unique);
     } catch (e) {
       console.error('Model listesi hatası:', e);
@@ -205,13 +220,12 @@ export default function SearchScreen() {
     }
   };
 
-  // Model değişince motorları çek
   const handleModelChange = async (value: string) => {
     setModel(value);
     setMotor('');
     setMotorList([]);
-    setErrorMsg(null);
     setResults([]);
+    setErrorMsg(null);
 
     if (!marka || !value) return;
 
@@ -219,7 +233,6 @@ export default function SearchScreen() {
       setLoadingMotors(true);
       let collectedMotors: string[] = [];
 
-      // 1) İlgili arac_id'leri bul
       const { data: araclarRows, error: errArac } = await supabase
         .from('araclar')
         .select('id')
@@ -246,7 +259,6 @@ export default function SearchScreen() {
         }
       }
 
-      // 2) Fallback: marka+model'e göre doğrudan bakimlar'dan
       if (collectedMotors.length === 0) {
         const { data: bakimRows2, error: errBakim2 } = await supabase
           .from('bakimlar')
@@ -264,8 +276,9 @@ export default function SearchScreen() {
       }
 
       const unique = Array.from(new Set(collectedMotors)).sort((a, b) =>
-        a.localeCompare(b, 'tr'),
+        a.localeCompare(b, 'tr')
       );
+
       setMotorList(unique);
     } catch (e) {
       console.error('Motor listesi hatası:', e);
@@ -275,7 +288,6 @@ export default function SearchScreen() {
     }
   };
 
-  // Arama fonksiyonu
   const onSearch = async () => {
     const trimmedMarka = marka.trim();
     const trimmedModel = model.trim();
@@ -292,10 +304,9 @@ export default function SearchScreen() {
     setResults([]);
 
     try {
-      let finalRows: BakimItem[] = [];
+      let allRows: BakimItem[] = [];
       const motorKey = trimmedMotor ? trimmedMotor.split('(')[0].trim() : '';
 
-      // 1) Normalized path: arac_id üzerinden
       const { data: araclarRows, error: errArac } = await supabase
         .from('araclar')
         .select('id')
@@ -310,89 +321,57 @@ export default function SearchScreen() {
           let q1 = supabase
             .from('bakimlar')
             .select('id, km, bakim, notlar, marka, model, motor_tip, yil')
-            .in('arac_id', ids)
-            .lte('km', parsedKm);
+            .in('arac_id', ids);
 
           if (motorKey) {
             q1 = q1.ilike('motor_tip', `%${motorKey}%`);
           }
 
           const { data: data1, error: err1 } = await q1
-            .order('km', { ascending: false })
-            .limit(50);
+            .order('km', { ascending: true })
+            .limit(200);
 
           if (!err1 && data1 && data1.length > 0) {
-            finalRows = data1 as BakimItem[];
-          }
-
-          // Fallback: km filtresi olmadan
-          if (finalRows.length === 0) {
-            let q1b = supabase
-              .from('bakimlar')
-              .select('id, km, bakim, notlar, marka, model, motor_tip, yil')
-              .in('arac_id', ids);
-
-            if (motorKey) {
-              q1b = q1b.ilike('motor_tip', `%${motorKey}%`);
-            }
-
-            const { data: data1b, error: err1b } = await q1b
-              .order('km', { ascending: true })
-              .limit(50);
-
-            if (!err1b && data1b && data1b.length > 0) {
-              finalRows = data1b as BakimItem[];
-            }
+            allRows = data1 as BakimItem[];
           }
         }
       }
 
-      // 2) Fallback: marka+model direkt
-      if (finalRows.length === 0) {
+      if (allRows.length === 0) {
         let q2 = supabase
           .from('bakimlar')
           .select('id, km, bakim, notlar, marka, model, motor_tip, yil')
           .eq('marka', trimmedMarka)
-          .ilike('model', `%${trimmedModel}%`)
-          .lte('km', parsedKm);
+          .ilike('model', `%${trimmedModel}%`);
 
         if (motorKey) {
           q2 = q2.ilike('motor_tip', `%${motorKey}%`);
         }
 
         const { data: data2, error: err2 } = await q2
-          .order('km', { ascending: false })
-          .limit(50);
+          .order('km', { ascending: true })
+          .limit(200);
 
-        if (!err2 && data2 && data2.length > 0) {
-          finalRows = data2 as BakimItem[];
-        } else {
-          let q2b = supabase
-            .from('bakimlar')
-            .select('id, km, bakim, notlar, marka, model, motor_tip, yil')
-            .eq('marka', trimmedMarka)
-            .ilike('model', `%${trimmedModel}%`);
+        if (err2) throw err2;
 
-          if (motorKey) {
-            q2b = q2b.ilike('motor_tip', `%${motorKey}%`);
-          }
-
-          const { data: data2b, error: err2b } = await q2b
-            .order('km', { ascending: true })
-            .limit(50);
-
-          if (err2b) {
-            throw err2b;
-          }
-
-          if (data2b && data2b.length > 0) {
-            finalRows = data2b as BakimItem[];
-          }
+        if (data2 && data2.length > 0) {
+          allRows = data2 as BakimItem[];
         }
       }
 
-      setResults(finalRows ?? []);
-    } catch (e: any) {
+      const validRows = allRows.filter((item) => item.km != null);
+
+      const upcoming = validRows
+        .filter((item) => (item.km ?? 0) >= parsedKm)
+        .sort((a, b) => (a.km ?? 0) - (b.km ?? 0));
+
+      const previous = validRows
+        .filter((item) => (item.km ?? 0) < parsedKm)
+        .sort((a, b) => (b.km ?? 0) - (a.km ?? 0));
+
+      const finalRows = [...upcoming, ...previous];
+      setResults(finalRows);
+    } catch (e) {
       console.error('Arama hatası:', e);
       setErrorMsg('Arama sırasında bir hata oluştu.');
     } finally {
@@ -400,11 +379,16 @@ export default function SearchScreen() {
     }
   };
 
-  // Helper functions
   const parsedKmForDisplay = Number(km.replace(/\D/g, '') || 0);
-  
+
   const formatKm = (value: number | null | undefined) =>
     value != null ? `${value.toLocaleString('tr-TR')} km` : '';
+
+  const formatDeltaKm = (value: number | null | undefined) => {
+    if (value == null) return '';
+    if (value < 0) return `${Math.abs(value).toLocaleString('tr-TR')} km sonra`;
+    return `${value.toLocaleString('tr-TR')} km önce`;
+  };
 
   const tagify = (txt: string | null | undefined): string[] => {
     if (!txt) return [];
@@ -419,8 +403,15 @@ export default function SearchScreen() {
     return Array.from(new Set(tags)).slice(0, 3);
   };
 
-  const latest = results[0];
-  const older = results.slice(1);
+  const upcomingMaintenance = results.find(
+    (item) => item.km != null && item.km >= parsedKmForDisplay
+  );
+
+  const previousMaintenances = results.filter(
+    (item) => item.km != null && item.km < parsedKmForDisplay
+  );
+
+  const searchReady = useMemo(() => !!marka && !!model && !!km.trim(), [marka, model, km]);
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -428,17 +419,50 @@ export default function SearchScreen() {
         style={styles.scroll}
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Bakım Arama</Text>
-          <Text style={styles.subtitle}>
-            Aracınızın marka, model ve kilometre bilgisi ile bakım geçmişini görüntüleyin
-          </Text>
-        </View>
+        <LinearGradient
+          colors={['#F8FBFF', '#EEF5FF', '#F8FAFC']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.heroCard}
+        >
+          <View style={styles.heroGlowOne} />
+          <View style={styles.heroGlowTwo} />
 
-        {/* Input Sections */}
-        <View style={styles.inputContainer}>
+          <View style={styles.heroBadge}>
+            <Ionicons name="construct-outline" size={14} color="#2563EB" />
+            <Text style={styles.heroBadgeText}>Akıllı bakım arama</Text>
+          </View>
+
+          <Text style={styles.title}>Aracına uygun bakımı bul</Text>
+          <Text style={styles.subtitle}>
+            Marka, model ve kilometreye göre yaklaşan bakım kaydını net şekilde gör.
+          </Text>
+
+          <View style={styles.quickStatsRow}>
+            <View style={styles.quickStatCard}>
+              <Ionicons name="car-outline" size={18} color="#2563EB" />
+              <Text style={styles.quickStatTitle}>Araç seç</Text>
+              <Text style={styles.quickStatText}>Marka ve model belirle</Text>
+            </View>
+
+            <View style={styles.quickStatCard}>
+              <Ionicons name="speedometer-outline" size={18} color="#2563EB" />
+              <Text style={styles.quickStatTitle}>Km gir</Text>
+              <Text style={styles.quickStatText}>Mevcut kilometreyi yaz</Text>
+            </View>
+          </View>
+        </LinearGradient>
+
+        <View style={styles.formCard}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Araç bilgileri</Text>
+            <Text style={styles.sectionSubtitle}>
+              Seçimlerini yap, ardından uygun bakım planını listele.
+            </Text>
+          </View>
+
           <SelectBox
             label="Marka"
             value={marka}
@@ -465,7 +489,7 @@ export default function SearchScreen() {
           />
 
           <SelectBox
-            label="Motor Tipi (opsiyonel)"
+            label="Motor tipi (opsiyonel)"
             value={motor}
             placeholder={
               model
@@ -481,122 +505,141 @@ export default function SearchScreen() {
           />
 
           <View style={styles.field}>
-            <Text style={styles.label}>Mevcut Kilometre</Text>
-            <View style={styles.kmInputWrapper}>
+            <Text style={styles.fieldLabel}>Mevcut kilometre</Text>
+            <View style={styles.kmInputBox}>
+              <View style={styles.kmIconWrap}>
+                <Ionicons name="speedometer-outline" size={18} color="#2563EB" />
+              </View>
               <TextInput
-                placeholder="Örn: 120000"
+                placeholder="Örn: 58744"
+                placeholderTextColor="#94A3B8"
                 keyboardType="numeric"
-                style={styles.input}
+                style={styles.kmInput}
                 value={km}
                 onChangeText={setKm}
               />
               <Text style={styles.kmSuffix}>km</Text>
             </View>
           </View>
+
+          <TouchableOpacity
+            style={[styles.searchButton, (!searchReady || loading) && styles.searchButtonDisabled]}
+            onPress={onSearch}
+            disabled={!searchReady || loading}
+            activeOpacity={0.92}
+          >
+            {loading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <>
+                <Ionicons name="search-outline" size={18} color="#FFFFFF" />
+                <Text style={styles.searchButtonText}>Bakımı listele</Text>
+              </>
+            )}
+          </TouchableOpacity>
         </View>
 
-        {/* Search Button */}
-        <TouchableOpacity
-          style={[styles.searchButton, loading && styles.buttonDisabled]}
-          onPress={onSearch}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color="#ffffff" />
-          ) : (
-            <Text style={styles.searchButtonText}>Bakımları Ara</Text>
-          )}
-        </TouchableOpacity>
-
-        {errorMsg && (
-          <View style={styles.errorContainer}>
+        {errorMsg ? (
+          <View style={styles.errorCard}>
+            <Ionicons name="alert-circle-outline" size={18} color="#DC2626" />
             <Text style={styles.errorText}>{errorMsg}</Text>
           </View>
-        )}
+        ) : null}
 
-        {/* Results */}
-        {results.length > 0 && (
-          <View style={styles.resultsContainer}>
-            <Text style={styles.resultsTitle}>
-              {parsedKmForDisplay.toLocaleString('tr-TR')} km'ye kadar kayıtlı bakımlar
-            </Text>
+        {results.length > 0 ? (
+          <View style={styles.resultsSection}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>
+                {parsedKmForDisplay.toLocaleString('tr-TR')} km bakım görünümü
+              </Text>
+              <Text style={styles.sectionSubtitle}>
+                Sana en yakın yaklaşan bakım üstte gösterilir.
+              </Text>
+            </View>
 
-            {/* Latest Maintenance */}
-            {latest && (
-              <View style={styles.highlightCard}>
-                <View style={styles.cardHeader}>
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>En Yakın Bakım</Text>
+            {upcomingMaintenance ? (
+              <LinearGradient
+                colors={['#EEF6FF', '#F8FBFF']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.highlightCard}
+              >
+                <View style={styles.highlightTopRow}>
+                  <View style={styles.highlightBadge}>
+                    <Text style={styles.highlightBadgeText}>Yaklaşan bakım</Text>
                   </View>
-                  {latest.km != null && (
-                    <Text style={styles.highlightKm}>{formatKm(latest.km)}</Text>
-                  )}
+
+                  {upcomingMaintenance.km != null ? (
+                    <Text style={styles.highlightKm}>{formatKm(upcomingMaintenance.km)}</Text>
+                  ) : null}
                 </View>
-                
+
                 <Text style={styles.vehicleInfo}>
-                  {latest.marka} {latest.model}
-                  {latest.yil && ` • ${latest.yil}`}
-                  {latest.motor_tip && ` • ${latest.motor_tip}`}
+                  {upcomingMaintenance.marka} {upcomingMaintenance.model}
+                  {upcomingMaintenance.yil ? ` • ${upcomingMaintenance.yil}` : ''}
+                  {upcomingMaintenance.motor_tip ? ` • ${upcomingMaintenance.motor_tip}` : ''}
                 </Text>
 
-                {latest.bakim && (
-                  <Text style={styles.maintenanceText}>{latest.bakim}</Text>
-                )}
+                {upcomingMaintenance.bakim ? (
+                  <Text style={styles.maintenanceText}>{upcomingMaintenance.bakim}</Text>
+                ) : null}
 
-                {latest.km != null && (
+                {upcomingMaintenance.km != null ? (
                   <Text style={styles.deltaText}>
-                    {formatKm(parsedKmForDisplay - latest.km)} önce yapılmış
+                    {upcomingMaintenance.km === parsedKmForDisplay
+                      ? 'Bakım kilometresi geldi'
+                      : `${(upcomingMaintenance.km - parsedKmForDisplay).toLocaleString('tr-TR')} km sonra`}
                   </Text>
-                )}
+                ) : null}
 
-                <View style={styles.tagsContainer}>
-                  {tagify(latest.bakim).map((tag) => (
+                <View style={styles.tagsRow}>
+                  {tagify(upcomingMaintenance.bakim).map((tag) => (
                     <View key={tag} style={styles.tag}>
                       <Text style={styles.tagText}>{tag}</Text>
                     </View>
                   ))}
                 </View>
 
-                {latest.notlar && (
-                  <View style={styles.noteContainer}>
+                {upcomingMaintenance.notlar ? (
+                  <View style={styles.noteBox}>
                     <Text style={styles.noteTitle}>Not</Text>
-                    <Text style={styles.noteText}>{latest.notlar}</Text>
+                    <Text style={styles.noteText}>{upcomingMaintenance.notlar}</Text>
                   </View>
-                )}
-              </View>
-            )}
+                ) : null}
+              </LinearGradient>
+            ) : null}
 
-            {/* Previous Maintenance Records */}
-            {older.length > 0 && (
-              <View style={styles.previousContainer}>
-                <Text style={styles.previousTitle}>Önceki Bakımlar</Text>
-                {older.map((item) => {
+            {previousMaintenances.length > 0 ? (
+              <View style={styles.listSection}>
+                <Text style={styles.listTitle}>Önceki bakım kayıtları</Text>
+
+                {previousMaintenances.map((item) => {
                   const delta = item.km != null ? parsedKmForDisplay - item.km : null;
+
                   return (
-                    <View key={item.id} style={styles.maintenanceCard}>
-                      <View style={styles.cardHeader}>
-                        <Text style={styles.vehicleInfoSmall}>
+                    <View key={item.id} style={styles.resultCard}>
+                      <View style={styles.resultCardTop}>
+                        <Text style={styles.resultVehicle}>
                           {item.marka} {item.model}
-                          {item.motor_tip && ` • ${item.motor_tip}`}
+                          {item.motor_tip ? ` • ${item.motor_tip}` : ''}
                         </Text>
-                        {item.km != null && (
-                          <Text style={styles.kmText}>{formatKm(item.km)}</Text>
-                        )}
+
+                        {item.km != null ? (
+                          <Text style={styles.resultKm}>{formatKm(item.km)}</Text>
+                        ) : null}
                       </View>
 
-                      {item.bakim && (
-                        <Text style={styles.maintenanceTextSmall}>{item.bakim}</Text>
-                      )}
+                      {item.bakim ? (
+                        <Text style={styles.resultMaintenance}>{item.bakim}</Text>
+                      ) : null}
 
-                      {delta != null && (
-                        <Text style={styles.deltaTextSmall}>
-                          {formatKm(delta)} önce
-                        </Text>
-                      )}
+                      {delta != null ? (
+                        <Text style={styles.resultDelta}>{formatDeltaKm(delta)}</Text>
+                      ) : null}
 
-                      <View style={styles.tagsContainer}>
+                      <View style={styles.tagsRow}>
                         {tagify(item.bakim).map((tag) => (
-                          <View key={tag} style={[styles.tag, styles.tagSmall]}>
+                          <View key={tag} style={[styles.tag, styles.smallTag]}>
                             <Text style={styles.tagText}>{tag}</Text>
                           </View>
                         ))}
@@ -605,22 +648,38 @@ export default function SearchScreen() {
                   );
                 })}
               </View>
-            )}
+            ) : null}
           </View>
-        )}
+        ) : null}
 
-        {/* Help Text */}
-        {results.length === 0 && !loading && (
-          <View style={styles.helpContainer}>
-            <Text style={styles.helpTitle}>Nasıl Kullanılır?</Text>
-            <Text style={styles.helpText}>
-              • Marka, model ve mevcut kilometreyi seçin{"\n"}
-              • Opsiyonel olarak motor tipini belirleyin{"\n"}
-              • Bakımları Ara butonuna tıklayın{"\n"}
-              • KM'nize en yakın bakım kayıtlarını görüntüleyin
+        {results.length === 0 && !loading && !errorMsg ? (
+          <View style={styles.emptyHelpCard}>
+            <View style={styles.emptyHelpIcon}>
+              <Ionicons name="car-sport-outline" size={22} color="#2563EB" />
+            </View>
+
+            <Text style={styles.emptyHelpTitle}>Bakım aramaya hazır</Text>
+            <Text style={styles.emptyHelpText}>
+              Aracının bilgilerini girerek sana en yakın bakım aralığını ve önceki bakım kayıtlarını
+              görebilirsin.
             </Text>
+
+            <View style={styles.helpSteps}>
+              <View style={styles.helpStep}>
+                <Text style={styles.helpStepNumber}>1</Text>
+                <Text style={styles.helpStepText}>Marka seç</Text>
+              </View>
+              <View style={styles.helpStep}>
+                <Text style={styles.helpStepNumber}>2</Text>
+                <Text style={styles.helpStepText}>Model seç</Text>
+              </View>
+              <View style={styles.helpStep}>
+                <Text style={styles.helpStepNumber}>3</Text>
+                <Text style={styles.helpStepText}>Km gir</Text>
+              </View>
+            </View>
           </View>
-        )}
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -629,309 +688,559 @@ export default function SearchScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#F4F8FC',
   },
+
   scroll: {
     flex: 1,
   },
+
   content: {
-    padding: 20,
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    paddingBottom: 140,
   },
-  header: {
+
+  heroCard: {
+    position: 'relative',
+    borderRadius: 28,
+    padding: 22,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+    marginBottom: 18,
+  },
+
+  heroGlowOne: {
+    position: 'absolute',
+    top: -40,
+    right: -20,
+    width: 140,
+    height: 140,
+    borderRadius: 999,
+    backgroundColor: 'rgba(59,130,246,0.10)',
+  },
+
+  heroGlowTwo: {
+    position: 'absolute',
+    bottom: -30,
+    left: -20,
+    width: 110,
+    height: 110,
+    borderRadius: 999,
+    backgroundColor: 'rgba(14,165,233,0.08)',
+  },
+
+  heroBadge: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 32,
+    backgroundColor: '#FFFFFFCC',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+    marginBottom: 14,
   },
+
+  heroBadgeText: {
+    marginLeft: 6,
+    color: '#2563EB',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
   title: {
     fontSize: 28,
+    lineHeight: 34,
     fontWeight: '800',
-    color: '#1a1a1a',
+    color: '#0F172A',
     marginBottom: 8,
   },
+
   subtitle: {
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
+    fontSize: 15,
     lineHeight: 22,
+    color: '#475569',
+    marginBottom: 18,
+    maxWidth: '92%',
   },
-  inputContainer: {
-    marginBottom: 24,
+
+  quickStatsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  } as any,
+
+  quickStatCard: {
+    flex: 1,
+    backgroundColor: '#FFFFFFD9',
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
-  field: {
+
+  quickStatTitle: {
+    marginTop: 10,
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+
+  quickStatText: {
+    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#64748B',
+  },
+
+  formCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     marginBottom: 16,
   },
-  label: {
+
+  sectionHeader: {
+    marginBottom: 10,
+  },
+
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+
+  sectionSubtitle: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#64748B',
+  },
+
+  field: {
+    marginTop: 14,
+  },
+
+  fieldLabel: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#1a1a1a',
+    fontWeight: '700',
+    color: '#1E293B',
     marginBottom: 8,
   },
-  selectBox: {
-    backgroundColor: '#f8f9fa',
+
+  selectTrigger: {
+    minHeight: 56,
+    borderRadius: 18,
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: '#e9ecef',
-    borderRadius: 12,
-    padding: 16,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  selectBoxOpen: {
-    borderColor: '#1a1a1a',
+
+  selectTriggerOpen: {
+    borderColor: '#93C5FD',
+    backgroundColor: '#FFFFFF',
   },
-  selectBoxDisabled: {
-    opacity: 0.5,
+
+  selectTriggerDisabled: {
+    opacity: 0.55,
   },
-  selectBoxValue: {
+
+  selectValue: {
     flex: 1,
-    fontSize: 16,
-    color: '#1a1a1a',
+    fontSize: 15,
+    color: '#0F172A',
     fontWeight: '500',
+    marginRight: 10,
   },
-  selectBoxPlaceholder: {
-    color: '#999',
+
+  selectPlaceholder: {
+    color: '#94A3B8',
+    fontWeight: '400',
   },
-  selectBoxChevron: {
-    fontSize: 12,
-    color: '#666',
-  },
-  selectBoxLoading: {
+
+  selectLoadingRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  selectBoxLoadingText: {
-    fontSize: 14,
-    color: '#666',
+
+  selectLoadingText: {
     marginLeft: 8,
+    color: '#64748B',
+    fontSize: 14,
   },
+
   optionsPanel: {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    right: 0,
-    backgroundColor: '#ffffff',
+    marginTop: 6,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#e9ecef',
-    borderRadius: 12,
-    marginTop: 4,
-    zIndex: 1000,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
     elevation: 4,
   },
+
+  optionsScroll: {
+    maxHeight: 220,
+  },
+
   optionItem: {
-    padding: 16,
+    minHeight: 50,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f1f1',
+    borderBottomColor: '#F1F5F9',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
+
+  optionItemActive: {
+    backgroundColor: '#EFF6FF',
+  },
+
   optionText: {
-    fontSize: 16,
-    color: '#1a1a1a',
+    fontSize: 15,
+    color: '#0F172A',
+    flex: 1,
+    marginRight: 10,
   },
-  optionTextEmpty: {
+
+  optionTextActive: {
+    color: '#2563EB',
+    fontWeight: '700',
+  },
+
+  emptyOption: {
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+
+  emptyOptionText: {
     fontSize: 14,
-    color: '#999',
-    textAlign: 'center',
+    color: '#94A3B8',
   },
-  kmInputWrapper: {
+
+  kmInputBox: {
+    minHeight: 56,
+    borderRadius: 18,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
   },
-  input: {
-    flex: 1,
-    backgroundColor: '#f8f9fa',
-    borderWidth: 1,
-    borderColor: '#e9ecef',
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: '#1a1a1a',
-  },
-  kmSuffix: {
-    marginLeft: 8,
-    fontSize: 14,
-    color: '#666',
-    fontWeight: '500',
-  },
-  searchButton: {
-    backgroundColor: '#2563eb',
-    borderRadius: 12,
-    padding: 18,
+
+  kmIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#EAF3FF',
     alignItems: 'center',
-    marginBottom: 16,
+    justifyContent: 'center',
   },
-  buttonDisabled: {
-    opacity: 0.6,
+
+  kmInput: {
+    flex: 1,
+    fontSize: 15,
+    color: '#0F172A',
+    marginLeft: 10,
+    paddingVertical: Platform.OS === 'ios' ? 14 : 10,
   },
+
+  kmSuffix: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#64748B',
+    marginLeft: 8,
+  },
+
+  searchButton: {
+    marginTop: 18,
+    minHeight: 56,
+    borderRadius: 18,
+    backgroundColor: '#2563EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    shadowColor: '#2563EB',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
+    elevation: 4,
+  },
+
+  searchButtonDisabled: {
+    opacity: 0.58,
+  },
+
   searchButtonText: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: '600',
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+    marginLeft: 8,
   },
-  errorContainer: {
-    backgroundColor: '#fef2f2',
-    borderWidth: 1,
-    borderColor: '#fecaca',
-    borderRadius: 12,
-    padding: 16,
+
+  errorCard: {
     marginBottom: 16,
+    borderRadius: 18,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
+
   errorText: {
-    color: '#dc2626',
+    flex: 1,
+    marginLeft: 8,
+    color: '#DC2626',
     fontSize: 14,
-    textAlign: 'center',
+    lineHeight: 19,
   },
-  resultsContainer: {
-    marginBottom: 24,
+
+  resultsSection: {
+    marginTop: 2,
   },
-  resultsTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#1a1a1a',
-    marginBottom: 16,
-  },
+
   highlightCard: {
-    backgroundColor: '#eff6ff',
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: '#dbeafe',
+    borderColor: '#DBEAFE',
+    padding: 18,
     marginBottom: 16,
   },
-  cardHeader: {
+
+  highlightTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: 12,
   },
-  badge: {
-    backgroundColor: '#2563eb',
+
+  highlightBadge: {
+    backgroundColor: '#2563EB',
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 20,
+    borderRadius: 999,
   },
-  badgeText: {
-    color: '#ffffff',
+
+  highlightBadgeText: {
+    color: '#FFFFFF',
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: '800',
   },
+
   highlightKm: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#2563eb',
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#2563EB',
   },
+
   vehicleInfo: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a1a',
+    fontSize: 15,
+    lineHeight: 21,
+    fontWeight: '700',
+    color: '#0F172A',
     marginBottom: 8,
   },
+
   maintenanceText: {
     fontSize: 15,
-    color: '#374151',
-    lineHeight: 20,
+    lineHeight: 21,
+    color: '#334155',
     marginBottom: 8,
   },
+
   deltaText: {
-    fontSize: 14,
-    color: '#4b5563',
+    fontSize: 13,
+    color: '#475569',
     marginBottom: 12,
   },
-  tagsContainer: {
+
+  tagsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
     marginBottom: 12,
-  },
+  } as any,
+
   tag: {
-    backgroundColor: '#dbeafe',
     paddingHorizontal: 10,
     paddingVertical: 6,
-    borderRadius: 16,
+    borderRadius: 999,
+    backgroundColor: '#DBEAFE',
   },
-  tagSmall: {
+
+  smallTag: {
     paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingVertical: 5,
   },
+
   tagText: {
-    color: '#1d4ed8',
     fontSize: 12,
-    fontWeight: '500',
+    fontWeight: '700',
+    color: '#1D4ED8',
   },
-  noteContainer: {
-    backgroundColor: '#ffffff',
-    borderRadius: 12,
-    padding: 12,
+
+  noteBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#e5e7eb',
+    borderColor: '#E2E8F0',
+    padding: 12,
   },
+
   noteTitle: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#6b7280',
+    fontWeight: '700',
+    color: '#64748B',
     marginBottom: 4,
   },
+
   noteText: {
     fontSize: 14,
-    color: '#374151',
-    lineHeight: 18,
+    lineHeight: 19,
+    color: '#334155',
   },
-  previousContainer: {
-    marginTop: 8,
+
+  listSection: {
+    marginTop: 6,
   },
-  previousTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1a1a1a',
+
+  listTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
     marginBottom: 12,
   },
-  maintenanceCard: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
+
+  resultCard: {
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     padding: 16,
-    borderWidth: 1,
-    borderColor: '#e9ecef',
     marginBottom: 12,
   },
-  vehicleInfoSmall: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1a1a1a',
+
+  resultCardTop: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+
+  resultVehicle: {
     flex: 1,
-  },
-  kmText: {
+    marginRight: 10,
     fontSize: 14,
-    fontWeight: '600',
-    color: '#4b5563',
-  },
-  maintenanceTextSmall: {
-    fontSize: 14,
-    color: '#374151',
-    lineHeight: 18,
-    marginVertical: 8,
-  },
-  deltaTextSmall: {
-    fontSize: 13,
-    color: '#6b7280',
-    marginBottom: 8,
-  },
-  helpContainer: {
-    backgroundColor: '#f0fdf4',
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: '#bbf7d0',
-  },
-  helpTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#166534',
-    marginBottom: 8,
-  },
-  helpText: {
-    fontSize: 14,
-    color: '#374151',
     lineHeight: 20,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+
+  resultKm: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+  },
+
+  resultMaintenance: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#334155',
+    marginBottom: 8,
+  },
+
+  resultDelta: {
+    fontSize: 13,
+    color: '#64748B',
+    marginBottom: 8,
+  },
+
+  emptyHelpCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 20,
+    alignItems: 'center',
+  },
+
+  emptyHelpIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#EAF3FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+
+  emptyHelpTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 8,
+  },
+
+  emptyHelpText: {
+    fontSize: 14,
+    lineHeight: 21,
+    color: '#64748B',
+    textAlign: 'center',
+    marginBottom: 18,
+  },
+
+  helpSteps: {
+    width: '100%',
+    flexDirection: 'row',
+    gap: 10,
+  } as any,
+
+  helpStep: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 16,
+    paddingVertical: 14,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+
+  helpStepNumber: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#2563EB',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    lineHeight: 24,
+    fontSize: 12,
+    fontWeight: '800',
+    marginBottom: 8,
+    overflow: 'hidden',
+  },
+
+  helpStepText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#334155',
+    textAlign: 'center',
   },
 });

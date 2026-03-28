@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-// TODO: Gerekirse burayı kendi ortamına göre değiştir
 const API_BASE = 'https://otoplans.net';
 
 type RangeBlock = {
@@ -49,6 +48,7 @@ type EvListItem = {
   accel_0_100_s?: number | null;
   top_speed_kmh?: number | null;
   power_kw?: number | null;
+  torque_nm?: number | null;
   drivetrain?: string | null;
   body?: string | null;
   seats?: number | null;
@@ -59,6 +59,8 @@ type EvListItem = {
   boot_l_min?: number | null;
   boot_l_max?: number | null;
   weight_kg?: number | null;
+  tow_braked_kg?: number | null;
+  tow_unbraked_kg?: number | null;
   soket_ac?: string | null;
   soket_dc?: string | null;
   source_url?: string | null;
@@ -95,7 +97,7 @@ type EvDetailResponse = {
   error?: string;
 };
 
-// --------- küçük helperlar ---------
+// ---- helperlar ----
 const formatNumber = (v: any): string =>
   v == null || Number.isNaN(Number(v)) ? '–' : Number(v).toLocaleString('tr-TR');
 
@@ -144,13 +146,17 @@ const getRangeBadge = (
 };
 
 async function fetchJson<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`);
+  const url = `${API_BASE}${path}`;
+  console.log('[fetchJson] İstek:', url);
+  const res = await fetch(url);
   let json: any = null;
   try {
     json = await res.json();
-  } catch {
-    // noop
+  } catch (e) {
+    console.log('[fetchJson] JSON parse hatası:', e);
   }
+  console.log('[fetchJson] Status:', res.status, res.statusText);
+  if (json) console.log('[fetchJson] Body (kısmi):', JSON.stringify(json).slice(0, 300));
   if (!res.ok) {
     const msg = (json && (json.error || json.message)) || `${res.status} ${res.statusText}`;
     throw new Error(msg);
@@ -158,7 +164,6 @@ async function fetchJson<T>(path: string): Promise<T> {
   return json as T;
 }
 
-// Kart verisinden default range/batarya üreticiler
 const buildDefaultRange = (item: EvListItem): RangeBlock => ({
   real: {
     min_km: item.range?.real?.min_km ?? null,
@@ -189,7 +194,7 @@ const buildDefaultBattery = (item: EvListItem): BatteryBlock => ({
   warranty_km: item.battery?.warranty_km ?? null,
 });
 
-// --------- küçük UI bileşenleri ---------
+// ---- küçük UI bileşenleri ----
 type SelectBoxProps = {
   label: string;
   value: string;
@@ -213,7 +218,7 @@ function SelectBox({
 
   const handlePress = () => {
     if (disabled || loading) return;
-    setOpen((o) => !o);
+    setOpen(o => !o);
   };
 
   const handleSelect = (val: string) => {
@@ -257,7 +262,7 @@ function SelectBox({
         <View style={styles.optionsPanel}>
           {options.length > 0 ? (
             <ScrollView style={{ maxHeight: 220 }} nestedScrollEnabled>
-              {options.map((opt) => (
+              {options.map(opt => (
                 <TouchableOpacity
                   key={opt}
                   onPress={() => handleSelect(opt)}
@@ -297,7 +302,7 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-// --------- Ana ekran ---------
+// ---- Ana ekran ----
 export default function EvGuideScreen() {
   const [brand, setBrand] = useState('');
   const [model, setModel] = useState('');
@@ -319,7 +324,7 @@ export default function EvGuideScreen() {
   const [detailData, setDetailData] = useState<EvDetailResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  // ----- MARKALAR -----
+  // MARKALAR
   useEffect(() => {
     const loadBrands = async () => {
       try {
@@ -331,7 +336,7 @@ export default function EvGuideScreen() {
           a.localeCompare(b, 'tr'),
         );
         setBrands(unique);
-      } catch (e: any) {
+      } catch (e) {
         console.error('[EV] Marka yükleme hatası', e);
         setErrorMsg('EV marka listesi alınamadı.');
       } finally {
@@ -341,7 +346,7 @@ export default function EvGuideScreen() {
     loadBrands();
   }, []);
 
-  // ----- MARKA DEĞİŞİNCE MODELLER -----
+  // MARKA → MODEL
   const handleBrandChange = async (val: string) => {
     setBrand(val);
     setModel('');
@@ -358,7 +363,7 @@ export default function EvGuideScreen() {
         a.localeCompare(b, 'tr'),
       );
       setModels(unique);
-    } catch (e: any) {
+    } catch (e) {
       console.error('[EV] Model yükleme hatası', e);
       setErrorMsg('EV model listesi alınamadı.');
     } finally {
@@ -366,7 +371,7 @@ export default function EvGuideScreen() {
     }
   };
 
-  // ----- LİSTE ARAMA -----
+  // LİSTE ARAMA
   const onSearchList = async () => {
     if (!brand && !search && !model) {
       setErrorMsg('En azından marka, model veya arama kelimesi gir.');
@@ -386,17 +391,13 @@ export default function EvGuideScreen() {
       params.set('page', '1');
       params.set('pageSize', '50');
 
-      const res = await fetchJson<EvListResponse>(
-        `/api/ev/models?${params.toString()}`,
-      );
+      const res = await fetchJson<EvListResponse>(`/api/ev/models?${params.toString()}`);
 
-      if (res.error) {
-        setErrorMsg(res.error);
-      }
+      if (res.error) setErrorMsg(res.error);
 
       setItems(res.items ?? []);
       setTotal(res.total ?? (res.items?.length || 0));
-    } catch (e: any) {
+    } catch (e) {
       console.error('[EV] Liste çekme hatası', e);
       setErrorMsg('EV listesi alınırken bir hata oluştu.');
     } finally {
@@ -404,14 +405,13 @@ export default function EvGuideScreen() {
     }
   };
 
-  // ----- DETAY -----
+  // DETAY AÇ
   const openDetail = async (item: EvListItem) => {
-    console.log('[EV] Detay açılıyor:', item.marka, item.model, item.varyant_norm);
+    console.log('[EV] Detay açılıyor (kart):', JSON.stringify(item, null, 2));
 
     const baseRange = buildDefaultRange(item);
     const baseBattery = buildDefaultBattery(item);
 
-    // Önce karttaki veriyi hemen göster
     setDetailVisible(true);
     setDetailLoading(true);
     setDetailData({
@@ -427,21 +427,21 @@ export default function EvGuideScreen() {
         ? Number(item.src_ids[0])
         : NaN;
 
-    // Kaynak ID yoksa API'ye gitme, sadece mevcut veriyi göster
     if (!Number.isFinite(id)) {
+      console.log('[EV] src_ids yok, sadece kart verisi gösterilecek.');
       setDetailLoading(false);
       return;
     }
 
-    // Kaynak ID varsa detay isteği at
     try {
       const res = await fetchJson<EvDetailResponse>(
         `/api/ev/model?id=${id}&includeSources=true`,
       );
+      console.log('[EV] /api/ev/model cevabı:', JSON.stringify(res, null, 2));
       setDetailData(res);
-    } catch (e: any) {
+    } catch (e) {
       console.error('[EV] Detay çekme hatası', e);
-      setDetailData((prev) =>
+      setDetailData(prev =>
         prev
           ? { ...prev, error: 'Detaylar tam alınamadı.' }
           : {
@@ -464,11 +464,15 @@ export default function EvGuideScreen() {
     return `${total} sonuçtan ilk ${items.length} tanesi listelendi`;
   }, [items, total]);
 
-  // --------- RENDER DETAY ---------
+  // DETAY İÇERİĞİ – sade ve garanti
   const renderDetailContent = () => {
     if (!detailVisible) return null;
 
-    if (!detailData && !detailLoading) {
+    const merged = detailData?.merged;
+    const r = detailData?.range;
+    const b = detailData?.battery;
+
+    if (!merged) {
       return (
         <View style={styles.detailContainer}>
           <View style={styles.detailHeader}>
@@ -480,30 +484,23 @@ export default function EvGuideScreen() {
               <Text style={styles.detailCloseText}>✕</Text>
             </TouchableOpacity>
           </View>
-          <Text style={styles.helper}>
-            Bir hata nedeniyle detay verisi alınamadı.
-          </Text>
+          <Text style={styles.helper}>Bir hata nedeniyle detay verisi alınamadı.</Text>
         </View>
       );
     }
 
-    const merged = detailData?.merged;
-    const r = detailData?.range;
-    const b = detailData?.battery;
-
-    const realRangeAvailable = hasRealRange(r);
-    const estRange = !realRangeAvailable && merged
-      ? estimateRangeKm(merged)
-      : null;
+    const realRangeAvailable = hasRealRange(r ?? null);
+    const estRange = !realRangeAvailable ? estimateRangeKm(merged) : null;
 
     return (
       <View style={styles.detailContainer}>
+        {/* Başlık */}
         <View style={styles.detailHeader}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.detailBrand}>{merged?.marka ?? '–'}</Text>
+            <Text style={styles.detailBrand}>{merged.marka ?? '–'}</Text>
             <Text style={styles.detailTitle}>
-              {merged?.model ?? '–'}
-              {merged?.varyant_norm ? ` • ${merged.varyant_norm}` : ''}
+              {merged.model ?? '–'}
+              {merged.varyant_norm ? ` • ${merged.varyant_norm}` : ''}
             </Text>
           </View>
           <TouchableOpacity
@@ -515,259 +512,184 @@ export default function EvGuideScreen() {
         </View>
 
         {detailLoading && (
-          <View style={{ paddingVertical: 16 }}>
+          <View style={{ paddingVertical: 12 }}>
             <ActivityIndicator color="#2563eb" />
             <Text style={styles.detailLoadingText}>Detaylar yükleniyor…</Text>
           </View>
         )}
 
-        {!detailLoading && merged && (
-          <ScrollView
-            style={{ flex: 1 }}
-            contentContainerStyle={{ paddingBottom: 24 }}
-            showsVerticalScrollIndicator={false}
-          >
-            {/* Genel */}
-            <View style={styles.sectionBox}>
-              <Text style={styles.sectionTitle}>Genel</Text>
-              <InfoRow label="WLTP" value={fmtWithUnit(merged.wltp_km, 'km')} />
-              <InfoRow
-                label="Gövde"
-                value={merged.body ?? '–'}
-              />
-              <InfoRow
-                label="Aktarma"
-                value={merged.drivetrain ?? '–'}
-              />
-              <InfoRow
-                label="0-100 km/s"
-                value={fmtWithUnit(merged.accel_0_100_s, 'sn')}
-              />
-              <InfoRow
-                label="Azami hız"
-                value={fmtWithUnit(merged.top_speed_kmh, 'km/s')}
-              />
-              <InfoRow
-                label="Güç"
-                value={fmtWithUnit(merged.power_kw, 'kW')}
-              />
-              <InfoRow
-                label="Koltuk sayısı"
-                value={formatNumber(merged.seats)}
-              />
-            </View>
+        {/* Gövde scrollable */}
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={{ paddingBottom: 24 }}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Genel */}
+          <View style={styles.sectionBox}>
+            <Text style={styles.sectionTitle}>Genel</Text>
+            <InfoRow label="WLTP" value={fmtWithUnit(merged.wltp_km, 'km')} />
+            <InfoRow label="0–100 km/s" value={fmtWithUnit(merged.accel_0_100_s, 'sn')} />
+            <InfoRow label="Azami hız" value={fmtWithUnit(merged.top_speed_kmh, 'km/s')} />
+            <InfoRow label="Güç" value={fmtWithUnit(merged.power_kw, 'kW')} />
+            <InfoRow label="Tork" value={fmtWithUnit(merged.torque_nm, 'Nm')} />
+            <InfoRow label="Aktarma" value={merged.drivetrain ?? '–'} />
+            <InfoRow label="Gövde" value={merged.body ?? '–'} />
+            <InfoRow label="Koltuk" value={formatNumber(merged.seats)} />
+          </View>
 
-            {/* Batarya & Şarj */}
-            <View style={styles.sectionBox}>
-              <Text style={styles.sectionTitle}>Batarya & Şarj</Text>
-              <InfoRow
-                label="Batarya (net / brüt)"
-                value={
-                  merged.battery_usable_kwh || merged.battery_nominal_kwh
-                    ? `${fmtWithUnit(merged.battery_usable_kwh, 'kWh')} / ${fmtWithUnit(
-                        merged.battery_nominal_kwh,
-                        'kWh',
-                      )}`
-                    : '–'
-                }
-              />
-              <InfoRow
-                label="Batarya tipi"
-                value={b?.type ?? merged.kimya ?? '–'}
-              />
-              <InfoRow
-                label="Katot"
-                value={b?.cathode_material ?? '–'}
-              />
-              <InfoRow
-                label="Mimari"
-                value={
-                  b?.architecture_v || merged.volt_mimari_v
-                    ? fmtWithUnit(b?.architecture_v ?? merged.volt_mimari_v, 'V')
-                    : '–'
-                }
-              />
-              <InfoRow
-                label="AC şarj (OBC)"
-                value={
-                  merged.ac_max_kw
-                    ? `${formatNumber(merged.ac_max_kw)} kW${
-                        merged.ac_phases ? ` / ${merged.ac_phases} faz` : ''
-                      }`
-                    : '–'
-                }
-              />
-              <InfoRow
-                label="DC tepe güç"
-                value={fmtWithUnit(merged.dc_max_kw, 'kW')}
-              />
-              <InfoRow
-                label="10–80% DC süre"
-                value={
-                  merged.dc_10_80_min != null
-                    ? fmtWithUnit(merged.dc_10_80_min, 'dk')
-                    : '–'
-                }
-              />
-              <InfoRow
-                label="Soket (AC / DC)"
-                value={`${merged.soket_ac ?? '–'} / ${merged.soket_dc ?? '–'}`}
-              />
-              <InfoRow
-                label="V2L"
-                value={
-                  merged.v2l
-                    ? merged.v2l_kw
-                      ? `Var (${formatNumber(merged.v2l_kw)} kW)`
-                      : 'Var'
-                    : '–'
-                }
-              />
-              <InfoRow
-                label="Garanti"
-                value={
-                  b?.warranty_years || b?.warranty_km
-                    ? `${b?.warranty_years ?? '–'} yıl / ${
-                        b?.warranty_km
-                          ? fmtWithUnit(b.warranty_km, 'km')
-                          : '–'
-                      }`
-                    : '–'
-                }
-              />
-            </View>
+          {/* Batarya & Şarj */}
+          <View style={styles.sectionBox}>
+            <Text style={styles.sectionTitle}>Batarya & Şarj</Text>
+            <InfoRow
+              label="Batarya (net / brüt)"
+              value={
+                merged.battery_usable_kwh || merged.battery_nominal_kwh
+                  ? `${fmtWithUnit(merged.battery_usable_kwh, 'kWh')} / ${fmtWithUnit(
+                      merged.battery_nominal_kwh,
+                      'kWh',
+                    )}`
+                  : '–'
+              }
+            />
+            <InfoRow label="Batarya tipi" value={b?.type ?? merged.kimya ?? '–'} />
+            <InfoRow
+              label="Mimari"
+              value={
+                b?.architecture_v || merged.volt_mimari_v
+                  ? fmtWithUnit(b?.architecture_v ?? merged.volt_mimari_v, 'V')
+                  : '–'
+              }
+            />
+            <InfoRow
+              label="AC şarj"
+              value={
+                merged.ac_max_kw
+                  ? `${formatNumber(merged.ac_max_kw)} kW${
+                      merged.ac_phases ? ` / ${merged.ac_phases} faz` : ''
+                    }`
+                  : '–'
+              }
+            />
+            <InfoRow label="DC tepe güç" value={fmtWithUnit(merged.dc_max_kw, 'kW')} />
+            <InfoRow
+              label="10–80% DC süre"
+              value={
+                merged.dc_10_80_min != null ? fmtWithUnit(merged.dc_10_80_min, 'dk') : '–'
+              }
+            />
+            <InfoRow
+              label="Soket (AC / DC)"
+              value={`${merged.soket_ac ?? '–'} / ${merged.soket_dc ?? '–'}`}
+            />
+            <InfoRow
+              label="V2L"
+              value={
+                merged.v2l
+                  ? merged.v2l_kw
+                    ? `Var (${formatNumber(merged.v2l_kw)} kW)`
+                    : 'Var'
+                  : 'Yok'
+              }
+            />
+          </View>
 
-            {/* Menzil */}
-            <View style={styles.sectionBox}>
-              <Text style={styles.sectionTitle}>Menzil</Text>
-              {realRangeAvailable ? (
-                <>
-                  <InfoRow
-                    label="Gerçek (min–maks)"
-                    value={
-                      r?.real
-                        ? `${formatNumber(r.real.min_km)}–${fmtWithUnit(
-                            r.real.max_km,
-                            'km',
-                          )}`
-                        : '–'
-                    }
-                  />
-                  <InfoRow
-                    label="Ilıman / karma"
-                    value={
-                      r?.mild?.combined_km
-                        ? fmtWithUnit(r.mild.combined_km, 'km')
-                        : '–'
-                    }
-                  />
-                  <InfoRow
-                    label="Soğuk / şehir"
-                    value={
-                      r?.cold?.city_km
-                        ? fmtWithUnit(r.cold.city_km, 'km')
-                        : '–'
-                    }
-                  />
-                  <InfoRow
-                    label="Soğuk / otoyol"
-                    value={
-                      r?.cold?.highway_km
-                        ? fmtWithUnit(r.cold.highway_km, 'km')
-                        : '–'
-                    }
-                  />
-                </>
-              ) : (
-                <>
-                  <InfoRow
-                    label="Tahmini menzil"
-                    value={
-                      estRange
-                        ? `~${estRange.toLocaleString('tr-TR')} km`
-                        : '–'
-                    }
-                  />
-                  <InfoRow
-                    label="Formül"
-                    value="Kullanılabilir kWh × 1000 / (Wh/km)"
-                  />
-                  <InfoRow
-                    label="Girdi (kullanılabilir)"
-                    value={fmtWithUnit(merged.battery_usable_kwh, 'kWh')}
-                  />
-                  <InfoRow
-                    label="Girdi (tüketim)"
-                    value={fmtWithUnit(merged.efficiency_wh_km, 'Wh/km')}
-                  />
-                  <InfoRow
-                    label="Not"
-                    value="Tahmini hesap; resmi veri değildir."
-                  />
-                </>
-              )}
-            </View>
-
-            {/* Boyut & Ağırlık */}
-            <View style={styles.sectionBox}>
-              <Text style={styles.sectionTitle}>Boyut & Ağırlık</Text>
-              <InfoRow
-                label="Uzunluk"
-                value={fmtWithUnit(merged.length_mm, 'mm')}
-              />
-              <InfoRow
-                label="Genişlik"
-                value={fmtWithUnit(merged.width_mm, 'mm')}
-              />
-              <InfoRow
-                label="Yükseklik"
-                value={fmtWithUnit(merged.height_mm, 'mm')}
-              />
-              <InfoRow
-                label="Dingil mesafesi"
-                value={fmtWithUnit(merged.wheelbase_mm, 'mm')}
-              />
-              <InfoRow
-                label="Bagaj (min/maks)"
-                value={
-                  merged.boot_l_min || merged.boot_l_max
-                    ? `${formatNumber(merged.boot_l_min)} / ${formatNumber(
-                        merged.boot_l_max,
-                      )} L`
-                    : '–'
-                }
-              />
-              <InfoRow
-                label="Ağırlık"
-                value={fmtWithUnit(merged.weight_kg, 'kg')}
-              />
-            </View>
-
-            {/* Kaynak */}
-            <View style={styles.sectionBox}>
-              <Text style={styles.sectionTitle}>Kaynak</Text>
-              {merged.source_url ? (
-                <TouchableOpacity
-                  onPress={() => Linking.openURL(merged.source_url!)}
-                >
-                  <Text style={styles.linkText}>
-                    Kaynağı aç (EV Database / üretici sitesi)
-                  </Text>
-                </TouchableOpacity>
-              ) : (
-                <Text style={styles.helper}>
-                  Bu kayıt için kaynak bağlantısı işlenmemiş.
-                </Text>
-              )}
-            </View>
-
-            {detailData?.error && (
-              <Text style={[styles.errorText, { marginTop: 8 }]}>
-                Not: {detailData.error}
-              </Text>
+          {/* Menzil */}
+          <View style={styles.sectionBox}>
+            <Text style={styles.sectionTitle}>Menzil</Text>
+            {realRangeAvailable ? (
+              <>
+                <InfoRow
+                  label="Gerçek min–maks"
+                  value={
+                    r?.real
+                      ? `${formatNumber(r.real.min_km)} – ${fmtWithUnit(
+                          r.real.max_km,
+                          'km',
+                        )}`
+                      : '–'
+                  }
+                />
+                <InfoRow
+                  label="Ilıman karma"
+                  value={r?.mild?.combined_km ? fmtWithUnit(r.mild.combined_km, 'km') : '–'}
+                />
+                <InfoRow
+                  label="Soğuk şehir"
+                  value={r?.cold?.city_km ? fmtWithUnit(r.cold.city_km, 'km') : '–'}
+                />
+                <InfoRow
+                  label="Soğuk otoyol"
+                  value={r?.cold?.highway_km ? fmtWithUnit(r.cold.highway_km, 'km') : '–'}
+                />
+              </>
+            ) : (
+              <>
+                <InfoRow
+                  label="Tahmini menzil"
+                  value={
+                    estRange ? `~${estRange.toLocaleString('tr-TR')} km` : 'Veri yetersiz'
+                  }
+                />
+                <InfoRow
+                  label="Formül"
+                  value="kullanılabilir kWh × 1000 / (Wh/km)"
+                />
+              </>
             )}
-          </ScrollView>
-        )}
+          </View>
+
+          {/* Boyut & Ağırlık */}
+          <View style={styles.sectionBox}>
+            <Text style={styles.sectionTitle}>Boyut & Ağırlık</Text>
+            <InfoRow label="Uzunluk" value={fmtWithUnit(merged.length_mm, 'mm')} />
+            <InfoRow label="Genişlik" value={fmtWithUnit(merged.width_mm, 'mm')} />
+            <InfoRow label="Yükseklik" value={fmtWithUnit(merged.height_mm, 'mm')} />
+            <InfoRow
+              label="Dingil mesafesi"
+              value={fmtWithUnit(merged.wheelbase_mm, 'mm')}
+            />
+            <InfoRow
+              label="Bagaj (min/maks)"
+              value={
+                merged.boot_l_min || merged.boot_l_max
+                  ? `${formatNumber(merged.boot_l_min)} / ${formatNumber(
+                      merged.boot_l_max,
+                    )} L`
+                  : '–'
+              }
+            />
+            <InfoRow label="Ağırlık" value={fmtWithUnit(merged.weight_kg, 'kg')} />
+            <InfoRow
+              label="Çeki (frenli / frensiz)"
+              value={
+                merged.tow_braked_kg || merged.tow_unbraked_kg
+                  ? `${fmtWithUnit(merged.tow_braked_kg, 'kg')} / ${fmtWithUnit(
+                      merged.tow_unbraked_kg,
+                      'kg',
+                    )}`
+                  : '–'
+              }
+            />
+          </View>
+
+          {/* Kaynak */}
+          <View style={styles.sectionBox}>
+            <Text style={styles.sectionTitle}>Kaynak</Text>
+            {merged.source_url ? (
+              <TouchableOpacity onPress={() => Linking.openURL(merged.source_url!)}>
+                <Text style={styles.linkText}>Kaynağı aç (EV Database / üretici)</Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={styles.helper}>Bu kayıt için kaynak bağlantısı yok.</Text>
+            )}
+          </View>
+
+          {detailData?.error && (
+            <Text style={[styles.errorText, { marginTop: 8 }]}>
+              Not: {detailData.error}
+            </Text>
+          )}
+        </ScrollView>
       </View>
     );
   };
@@ -780,14 +702,11 @@ export default function EvGuideScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Başlık */}
         <Text style={styles.title}>Elektrikli Araç Rehberi</Text>
         <Text style={styles.subtitle}>
-          Türkiye’de satılan elektrikli araçların batarya, menzil ve şarj
-          hızlarını tek ekranda kıyasla.
+          Türkiye’de satılan elektrikli araçların batarya, menzil ve şarj hızlarını tek ekranda kıyasla.
         </Text>
 
-        {/* Filtre kutusu */}
         <View style={styles.filterBox}>
           <SelectBox
             label="Marka"
@@ -837,14 +756,11 @@ export default function EvGuideScreen() {
             )}
           </TouchableOpacity>
 
-          {badgeText ? (
-            <Text style={styles.listInfo}>{badgeText}</Text>
-          ) : null}
+          {badgeText ? <Text style={styles.listInfo}>{badgeText}</Text> : null}
         </View>
 
         {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
 
-        {/* Liste */}
         {loadingList && (
           <View style={{ marginTop: 16 }}>
             <ActivityIndicator color="#2563eb" />
@@ -854,9 +770,8 @@ export default function EvGuideScreen() {
 
         {!loadingList && items.length === 0 && !errorMsg && (
           <Text style={styles.helper}>
-            Bir marka/model seçip ya da spesifik bir kelimeyle (örneğin
-            “Elettrica 54 kWh”, “LFP batarya”, “800V mimari”) arama yaparak
-            listelenen EV modelleri inceleyebilirsin.
+            Bir marka/model seçip ya da “Elettrica 54 kWh”, “LFP batarya”, “800V mimari” gibi
+            kelimelerle arama yaparak listelenen EV modelleri inceleyebilirsin.
           </Text>
         )}
 
@@ -896,19 +811,11 @@ export default function EvGuideScreen() {
                   <View style={styles.kpiRow}>
                     <KpiBox
                       label="AC şarj"
-                      value={
-                        it.ac_max_kw != null
-                          ? `${it.ac_max_kw} kW`
-                          : '–'
-                      }
+                      value={it.ac_max_kw != null ? `${it.ac_max_kw} kW` : '–'}
                     />
                     <KpiBox
                       label="DC şarj"
-                      value={
-                        it.dc_max_kw != null
-                          ? `${it.dc_max_kw} kW`
-                          : '–'
-                      }
+                      value={it.dc_max_kw != null ? `${it.dc_max_kw} kW` : '–'}
                     />
                   </View>
 
@@ -949,9 +856,7 @@ export default function EvGuideScreen() {
         transparent
         onRequestClose={() => setDetailVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          {renderDetailContent()}
-        </View>
+        <View style={styles.modalOverlay}>{renderDetailContent()}</View>
       </Modal>
     </SafeAreaView>
   );
@@ -979,8 +884,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#4b5563',
   },
-
-  // Filtre kutusu
   filterBox: {
     marginTop: 16,
     padding: 12,
@@ -989,7 +892,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#d1d5db',
   },
-
   field: {
     marginTop: 12,
   },
@@ -1009,8 +911,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#111827',
   },
-
-  // SelectBox
   selectBox: {
     borderRadius: 10,
     borderWidth: 1,
@@ -1069,7 +969,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#6b7280',
   },
-
   button: {
     marginTop: 14,
     borderRadius: 12,
@@ -1097,8 +996,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#6b7280',
   },
-
-  // Kartlar
   cardsGrid: {
     marginTop: 18,
     gap: 10,
@@ -1135,7 +1032,6 @@ const styles = StyleSheet.create({
     color: '#4b5563',
     marginTop: 2,
   },
-
   kpiRow: {
     flexDirection: 'row',
     gap: 8,
@@ -1160,7 +1056,6 @@ const styles = StyleSheet.create({
     color: '#111827',
     marginTop: 2,
   },
-
   badge: {
     alignSelf: 'flex-start',
     marginTop: 8,
@@ -1179,7 +1074,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#065f46',
   },
-
   cardFooterRow: {
     marginTop: 8,
     flexDirection: 'row',
@@ -1189,13 +1083,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#6b7280',
   },
-
-  // Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(15,23,42,0.65)',
-    justifyContent: 'center',   // ortada
-    alignItems: 'center',       // yatayda ortala
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   detailContainer: {
     maxHeight: '90%',
@@ -1238,7 +1130,6 @@ const styles = StyleSheet.create({
     color: '#4b5563',
     textAlign: 'center',
   },
-
   sectionBox: {
     marginTop: 10,
     borderRadius: 14,
@@ -1253,7 +1144,6 @@ const styles = StyleSheet.create({
     color: '#111827',
     marginBottom: 4,
   },
-
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -1272,7 +1162,6 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'right',
   },
-
   linkText: {
     fontSize: 12,
     color: '#2563eb',
