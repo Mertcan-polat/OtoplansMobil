@@ -1,4 +1,3 @@
-// src/screens/AccountScreen.tsx
 import React, { useEffect, useState } from 'react';
 import {
   View,
@@ -29,14 +28,6 @@ type QuickActionProps = {
   onPress: () => void;
 };
 
-type InfoCardProps = {
-  icon: string;
-  title: string;
-  description: string;
-  color: string;
-  onPress: () => void;
-};
-
 function QuickActionCard({
   icon,
   title,
@@ -60,44 +51,38 @@ function QuickActionCard({
   );
 }
 
-function InfoCard({
-  icon,
-  title,
-  description,
-  color,
-  onPress,
-}: InfoCardProps) {
-  return (
-    <TouchableOpacity style={styles.infoCard} activeOpacity={0.92} onPress={onPress}>
-      <View style={[styles.infoIconWrap, { backgroundColor: color }]}>
-        <Ionicons name={icon} size={18} color="#FFFFFF" />
-      </View>
-
-      <View style={styles.infoTextWrap}>
-        <Text style={styles.infoTitle}>{title}</Text>
-        <Text style={styles.infoDescription}>{description}</Text>
-      </View>
-
-      <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-    </TouchableOpacity>
-  );
-}
-
 export default function AccountScreen() {
   const navigation = useNavigation<Nav>();
 
   const [user, setUser] = useState<UserInfo | null>(null);
   const [loadingUser, setLoadingUser] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const loadUser = async () => {
     try {
       setLoadingUser(true);
+
       const { data, error } = await supabase.auth.getUser();
 
       if (error || !data.user) {
         setUser(null);
+        setIsAdmin(false);
+        return;
+      }
+
+      setUser({ email: data.user.email });
+
+      const { data: rolesData, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', data.user.id);
+
+      if (rolesError) {
+        console.log('[AccountScreen] roles error:', rolesError);
+        setIsAdmin(false);
       } else {
-        setUser({ email: data.user.email });
+        const adminExists = (rolesData || []).some((x) => x.role === 'admin');
+        setIsAdmin(adminExists);
       }
     } finally {
       setLoadingUser(false);
@@ -119,40 +104,34 @@ export default function AccountScreen() {
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
+      Alert.alert('Başarılı', 'Çıkış yapıldı.');
     } catch {
       Alert.alert('Hata', 'Çıkış yapılırken bir sorun oluştu.');
     }
   };
 
   const goToLogin = () => {
-    navigation.navigate('Login' as never);
+    navigation.navigate('Login');
+  };
+
+  const goToRegister = () => {
+    navigation.navigate('Register');
   };
 
   const goToGarage = () => {
-    navigation.navigate('Garage' as never);
+    navigation.navigate('Garage');
   };
 
   const goToKronik = () => {
-    navigation.navigate('KronikSorun' as never);
+    navigation.navigate('KronikSorun');
   };
 
   const goToEvGuide = () => {
-    navigation.navigate('EvGuide' as never);
+    navigation.navigate('EvGuide');
   };
 
-  const goToFAQ = () => {
-    navigation.navigate('FAQ' as never);
-  };
-
-  const goToAbout = () => {
-    navigation.navigate('About' as never);
-  };
-
-  const goToContact = () => {
-    Alert.alert(
-      'İletişim',
-      'İletişim ekranını bir sonraki adımda ekleyeceğiz. Şimdilik bu alan hazır değil.'
-    );
+  const goToAdminPanel = () => {
+    navigation.navigate('AdminPanel');
   };
 
   return (
@@ -170,7 +149,7 @@ export default function AccountScreen() {
         >
           <View style={styles.heroBadge}>
             <Ionicons name="person-circle-outline" size={14} color="#2563EB" />
-            <Text style={styles.heroBadgeText}>Hesap & destek merkezi</Text>
+            <Text style={styles.heroBadgeText}>Hesap merkezi</Text>
           </View>
 
           <Text style={styles.heroTitle}>Hesabın ve uygulama kısayolların burada</Text>
@@ -178,23 +157,6 @@ export default function AccountScreen() {
             Giriş yaparak araçlarını kaydet, bakım geçmişini takip et ve Otoplans özelliklerine
             daha hızlı eriş.
           </Text>
-
-          <View style={styles.heroMiniRow}>
-            <View style={styles.heroMiniChip}>
-              <Ionicons name="car-outline" size={13} color="#2563EB" />
-              <Text style={styles.heroMiniChipText}>Araç yönetimi</Text>
-            </View>
-
-            <View style={styles.heroMiniChip}>
-              <Ionicons name="construct-outline" size={13} color="#2563EB" />
-              <Text style={styles.heroMiniChipText}>Bakım takibi</Text>
-            </View>
-
-            <View style={styles.heroMiniChip}>
-              <Ionicons name="help-circle-outline" size={13} color="#2563EB" />
-              <Text style={styles.heroMiniChipText}>Destek</Text>
-            </View>
-          </View>
         </LinearGradient>
 
         <View style={styles.accountCard}>
@@ -218,8 +180,8 @@ export default function AccountScreen() {
                 <>
                   <Text style={styles.accountTitle}>Henüz giriş yapmadın</Text>
                   <Text style={styles.accountSubtitle}>
-                    Giriş yaparak araçlarını kaydedebilir, bakım ve favori içeriklerini daha sonra
-                    tekrar görebilirsin.
+                    Giriş yaparak araçlarını kaydedebilir, bakım geçmişini takip edebilir ve
+                    uygulamayı daha kişisel kullanabilirsin.
                   </Text>
                 </>
               )}
@@ -240,7 +202,7 @@ export default function AccountScreen() {
               <TouchableOpacity
                 style={styles.secondaryButton}
                 activeOpacity={0.88}
-                onPress={goToLogin}
+                onPress={goToRegister}
               >
                 <Ionicons name="person-add-outline" size={18} color="#2563EB" />
                 <Text style={styles.secondaryButtonText}>Kayıt ol</Text>
@@ -298,46 +260,16 @@ export default function AccountScreen() {
             color="#22C55E"
             onPress={goToEvGuide}
           />
-        </View>
 
-        <View style={styles.sectionBlock}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Bilgi ve destek</Text>
-            <Text style={styles.sectionSubtitle}>
-              Yardım ve kurumsal sayfalara buradan ulaş.
-            </Text>
-          </View>
-
-          <InfoCard
-            icon="help-circle-outline"
-            title="Sıkça Sorulan Sorular"
-            description="Yazdığımız FAQ ekranına geç."
-            color="#0EA5E9"
-            onPress={goToFAQ}
-          />
-
-          <InfoCard
-            icon="information-circle-outline"
-            title="Otoplans Hakkında"
-            description="Yazdığımız About ekranına geç."
-            color="#6366F1"
-            onPress={goToAbout}
-          />
-
-          <InfoCard
-            icon="mail-outline"
-            title="İletişim"
-            description="İletişim ekranını sonraki adımda ekleyeceğiz."
-            color="#EC4899"
-            onPress={goToContact}
-          />
-        </View>
-
-        <View style={styles.footerNote}>
-          <Ionicons name="shield-checkmark-outline" size={16} color="#2563EB" />
-          <Text style={styles.footerNoteText}>
-            FAQ ve About artık gerçek ekrana gitmeli. Contact ekranını sonra bağlarız.
-          </Text>
+          {isAdmin ? (
+            <QuickActionCard
+              icon="shield-checkmark-outline"
+              title="Admin Paneli"
+              subtitle="Testler, kullanıcılar ve log kayıtları"
+              color="#7C3AED"
+              onPress={goToAdminPanel}
+            />
+          ) : null}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -394,28 +326,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 22,
     color: '#475569',
-    marginBottom: 16,
-  },
-  heroMiniRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  } as any,
-  heroMiniChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFFD9',
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-  },
-  heroMiniChipText: {
-    marginLeft: 5,
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#1E293B',
   },
   accountCard: {
     backgroundColor: '#FFFFFF',
@@ -594,56 +504,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     color: '#64748B',
-  },
-  infoCard: {
-    minHeight: 86,
-    borderRadius: 18,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  infoIconWrap: {
-    width: 42,
-    height: 42,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  infoTextWrap: {
-    flex: 1,
-    paddingRight: 8,
-  },
-  infoTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#0F172A',
-    marginBottom: 3,
-  },
-  infoDescription: {
-    fontSize: 13,
-    lineHeight: 18,
-    color: '#64748B',
-  },
-  footerNote: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: '#EFF6FF',
-    borderWidth: 1,
-    borderColor: '#DBEAFE',
-    borderRadius: 18,
-    padding: 14,
-  },
-  footerNoteText: {
-    flex: 1,
-    marginLeft: 8,
-    fontSize: 13,
-    lineHeight: 19,
-    color: '#1E40AF',
   },
 });

@@ -1,4 +1,3 @@
-// App.tsx
 import React, { useState } from 'react';
 import { View, StyleSheet, Platform } from 'react-native';
 import {
@@ -19,12 +18,14 @@ import CompareDecisionScreen from './src/screens/CompareDecisionScreen';
 
 import GarageScreen from './src/screens/GarageScreen';
 import AccountScreen from './src/screens/AccountScreen';
-import LoginScreen from './src/screens/LoginScreen';
+import LoginScreen from './src/screens/auth/LoginScreen';
+import RegisterScreen from './src/screens/auth/RegisterScreen';
 import RemindersScreen from './src/screens/RemindersScreen';
 import GuidesScreen from './src/screens/GuidesScreen';
 import RiskAnalysisScreen from './src/screens/RiskAnalysisScreen';
 
 import BottomNav from './src/components/BottomNav';
+import AdminPanelScreen from './src/screens/AdminPanelScreen';
 
 export type RootStackParamList = {
   Home: undefined;
@@ -32,13 +33,14 @@ export type RootStackParamList = {
   KronikSorun: undefined;
   CompareDecision: undefined;
   EvGuide: undefined;
-
   Garage: undefined;
   Account: undefined;
   Login: undefined;
+  Register: undefined;
   Reminders: undefined;
   Guides: undefined;
   RiskAnalysis: undefined;
+  AdminPanel: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -69,8 +71,7 @@ export default function App() {
       if (!state) return;
       const route = state.routes[state.index ?? 0];
       if (route && typeof route.name === 'string') {
-        // @ts-ignore
-        setCurrentRouteName(route.name);
+        setCurrentRouteName(route.name as keyof RootStackParamList);
       }
     } catch (e) {
       console.warn('[Nav] route state parse error', e);
@@ -135,6 +136,12 @@ export default function App() {
               />
 
               <Stack.Screen
+                name="Register"
+                component={RegisterScreen}
+                options={{ title: 'Kayıt Ol' }}
+              />
+
+              <Stack.Screen
                 name="Reminders"
                 component={RemindersScreen}
                 options={{ title: 'Hatırlatıcılar' }}
@@ -150,6 +157,12 @@ export default function App() {
                 name="RiskAnalysis"
                 component={RiskAnalysisScreen}
                 options={{ title: 'Risk Analizi' }}
+              />
+
+              <Stack.Screen
+                name="AdminPanel"
+                component={AdminPanelScreen}
+                options={{ title: 'Admin Paneli' }}
               />
             </Stack.Navigator>
           </View>

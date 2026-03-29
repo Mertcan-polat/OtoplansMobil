@@ -10,8 +10,11 @@ import {
   TextInput,
   Modal,
   Linking,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Ionicons from 'react-native-vector-icons/Ionicons';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const API_BASE = 'https://otoplans.net';
 
@@ -97,7 +100,6 @@ type EvDetailResponse = {
   error?: string;
 };
 
-// ---- helperlar ----
 const formatNumber = (v: any): string =>
   v == null || Number.isNaN(Number(v)) ? '–' : Number(v).toLocaleString('tr-TR');
 
@@ -147,20 +149,20 @@ const getRangeBadge = (
 
 async function fetchJson<T>(path: string): Promise<T> {
   const url = `${API_BASE}${path}`;
-  console.log('[fetchJson] İstek:', url);
   const res = await fetch(url);
+
   let json: any = null;
   try {
     json = await res.json();
-  } catch (e) {
-    console.log('[fetchJson] JSON parse hatası:', e);
+  } catch {
+    json = null;
   }
-  console.log('[fetchJson] Status:', res.status, res.statusText);
-  if (json) console.log('[fetchJson] Body (kısmi):', JSON.stringify(json).slice(0, 300));
+
   if (!res.ok) {
     const msg = (json && (json.error || json.message)) || `${res.status} ${res.statusText}`;
     throw new Error(msg);
   }
+
   return json as T;
 }
 
@@ -194,7 +196,6 @@ const buildDefaultBattery = (item: EvListItem): BatteryBlock => ({
   warranty_km: item.battery?.warranty_km ?? null,
 });
 
-// ---- küçük UI bileşenleri ----
 type SelectBoxProps = {
   label: string;
   value: string;
@@ -218,7 +219,7 @@ function SelectBox({
 
   const handlePress = () => {
     if (disabled || loading) return;
-    setOpen(o => !o);
+    setOpen((prev) => !prev);
   };
 
   const handleSelect = (val: string) => {
@@ -228,32 +229,35 @@ function SelectBox({
 
   return (
     <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={styles.fieldLabel}>{label}</Text>
+
       <TouchableOpacity
-        activeOpacity={0.8}
+        activeOpacity={0.9}
         onPress={handlePress}
         style={[
-          styles.selectBox,
-          (disabled || loading) && styles.selectBoxDisabled,
+          styles.selectTrigger,
+          open && styles.selectTriggerOpen,
+          disabled && styles.selectTriggerDisabled,
         ]}
       >
         {loading ? (
-          <View style={styles.selectBoxLoading}>
-            <ActivityIndicator size="small" color="#2563eb" />
-            <Text style={styles.selectBoxLoadingText}>Yükleniyor…</Text>
+          <View style={styles.selectLoadingRow}>
+            <ActivityIndicator size="small" color="#2563EB" />
+            <Text style={styles.selectLoadingText}>Yükleniyor...</Text>
           </View>
         ) : (
           <>
             <Text
-              style={[
-                styles.selectBoxValue,
-                !value && styles.selectBoxPlaceholder,
-              ]}
               numberOfLines={1}
+              style={[styles.selectValue, !value && styles.selectPlaceholder]}
             >
               {value || placeholder}
             </Text>
-            <Text style={styles.selectBoxChevron}>{open ? '▲' : '▼'}</Text>
+            <Ionicons
+              name={open ? 'chevron-up' : 'chevron-down'}
+              size={18}
+              color="#64748B"
+            />
           </>
         )}
       </TouchableOpacity>
@@ -261,21 +265,30 @@ function SelectBox({
       {open && !loading && (
         <View style={styles.optionsPanel}>
           {options.length > 0 ? (
-            <ScrollView style={{ maxHeight: 220 }} nestedScrollEnabled>
-              {options.map(opt => (
-                <TouchableOpacity
-                  key={opt}
-                  onPress={() => handleSelect(opt)}
-                  activeOpacity={0.85}
-                  style={styles.optionItem}
-                >
-                  <Text style={styles.optionText}>{opt}</Text>
-                </TouchableOpacity>
-              ))}
+            <ScrollView nestedScrollEnabled style={styles.optionsScroll}>
+              {options.map((opt) => {
+                const active = opt === value;
+
+                return (
+                  <TouchableOpacity
+                    key={opt}
+                    activeOpacity={0.85}
+                    onPress={() => handleSelect(opt)}
+                    style={[styles.optionItem, active && styles.optionItemActive]}
+                  >
+                    <Text style={[styles.optionText, active && styles.optionTextActive]}>
+                      {opt}
+                    </Text>
+                    {active ? (
+                      <Ionicons name="checkmark-circle" size={18} color="#2563EB" />
+                    ) : null}
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
           ) : (
-            <View style={[styles.optionItem, { paddingVertical: 10 }]}>
-              <Text style={styles.optionTextEmpty}>Seçenek bulunamadı.</Text>
+            <View style={styles.emptyOption}>
+              <Text style={styles.emptyOptionText}>Seçenek bulunamadı</Text>
             </View>
           )}
         </View>
@@ -284,11 +297,11 @@ function SelectBox({
   );
 }
 
-function KpiBox({ label, value }: { label: string; value: string }) {
+function StatBox({ label, value }: { label: string; value: string }) {
   return (
-    <View style={styles.kpiBox}>
-      <Text style={styles.kpiLabel}>{label}</Text>
-      <Text style={styles.kpiValue}>{value}</Text>
+    <View style={styles.statBox}>
+      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={styles.statValue}>{value}</Text>
     </View>
   );
 }
@@ -302,7 +315,6 @@ function InfoRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-// ---- Ana ekran ----
 export default function EvGuideScreen() {
   const [brand, setBrand] = useState('');
   const [model, setModel] = useState('');
@@ -324,7 +336,6 @@ export default function EvGuideScreen() {
   const [detailData, setDetailData] = useState<EvDetailResponse | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  // MARKALAR
   useEffect(() => {
     const loadBrands = async () => {
       try {
@@ -332,9 +343,7 @@ export default function EvGuideScreen() {
         setErrorMsg(null);
         const res = await fetchJson<EvOptionsResponse>('/api/ev/options');
         const raw = res.markalar ?? [];
-        const unique = Array.from(new Set(raw)).sort((a, b) =>
-          a.localeCompare(b, 'tr'),
-        );
+        const unique = Array.from(new Set(raw)).sort((a, b) => a.localeCompare(b, 'tr'));
         setBrands(unique);
       } catch (e) {
         console.error('[EV] Marka yükleme hatası', e);
@@ -343,25 +352,27 @@ export default function EvGuideScreen() {
         setLoadingBrands(false);
       }
     };
+
     loadBrands();
   }, []);
 
-  // MARKA → MODEL
   const handleBrandChange = async (val: string) => {
     setBrand(val);
     setModel('');
     setModels([]);
+
     if (!val) return;
+
     try {
       setLoadingModels(true);
       setErrorMsg(null);
+
       const res = await fetchJson<EvOptionsResponse>(
         `/api/ev/options?marka=${encodeURIComponent(val)}`,
       );
+
       const raw = res.modeller ?? [];
-      const unique = Array.from(new Set(raw)).sort((a, b) =>
-        a.localeCompare(b, 'tr'),
-      );
+      const unique = Array.from(new Set(raw)).sort((a, b) => a.localeCompare(b, 'tr'));
       setModels(unique);
     } catch (e) {
       console.error('[EV] Model yükleme hatası', e);
@@ -371,12 +382,12 @@ export default function EvGuideScreen() {
     }
   };
 
-  // LİSTE ARAMA
   const onSearchList = async () => {
     if (!brand && !search && !model) {
-      setErrorMsg('En azından marka, model veya arama kelimesi gir.');
+      setErrorMsg('En az bir marka, model veya arama kelimesi gir.');
       return;
     }
+
     setErrorMsg(null);
     setLoadingList(true);
     setItems([]);
@@ -393,7 +404,9 @@ export default function EvGuideScreen() {
 
       const res = await fetchJson<EvListResponse>(`/api/ev/models?${params.toString()}`);
 
-      if (res.error) setErrorMsg(res.error);
+      if (res.error) {
+        setErrorMsg(res.error);
+      }
 
       setItems(res.items ?? []);
       setTotal(res.total ?? (res.items?.length || 0));
@@ -405,10 +418,7 @@ export default function EvGuideScreen() {
     }
   };
 
-  // DETAY AÇ
   const openDetail = async (item: EvListItem) => {
-    console.log('[EV] Detay açılıyor (kart):', JSON.stringify(item, null, 2));
-
     const baseRange = buildDefaultRange(item);
     const baseBattery = buildDefaultBattery(item);
 
@@ -428,7 +438,6 @@ export default function EvGuideScreen() {
         : NaN;
 
     if (!Number.isFinite(id)) {
-      console.log('[EV] src_ids yok, sadece kart verisi gösterilecek.');
       setDetailLoading(false);
       return;
     }
@@ -437,11 +446,10 @@ export default function EvGuideScreen() {
       const res = await fetchJson<EvDetailResponse>(
         `/api/ev/model?id=${id}&includeSources=true`,
       );
-      console.log('[EV] /api/ev/model cevabı:', JSON.stringify(res, null, 2));
       setDetailData(res);
     } catch (e) {
       console.error('[EV] Detay çekme hatası', e);
-      setDetailData(prev =>
+      setDetailData((prev) =>
         prev
           ? { ...prev, error: 'Detaylar tam alınamadı.' }
           : {
@@ -464,7 +472,11 @@ export default function EvGuideScreen() {
     return `${total} sonuçtan ilk ${items.length} tanesi listelendi`;
   }, [items, total]);
 
-  // DETAY İÇERİĞİ – sade ve garanti
+  const filterReady = useMemo(
+    () => !!brand || !!model || !!search.trim(),
+    [brand, model, search],
+  );
+
   const renderDetailContent = () => {
     if (!detailVisible) return null;
 
@@ -474,17 +486,19 @@ export default function EvGuideScreen() {
 
     if (!merged) {
       return (
-        <View style={styles.detailContainer}>
+        <View style={styles.detailSheet}>
           <View style={styles.detailHeader}>
             <Text style={styles.detailTitle}>Detay bulunamadı</Text>
             <TouchableOpacity
               onPress={() => setDetailVisible(false)}
               style={styles.detailCloseBtn}
             >
-              <Text style={styles.detailCloseText}>✕</Text>
+              <Ionicons name="close" size={20} color="#0F172A" />
             </TouchableOpacity>
           </View>
-          <Text style={styles.helper}>Bir hata nedeniyle detay verisi alınamadı.</Text>
+          <Text style={styles.emptyText}>
+            Bir hata nedeniyle detay verisi alınamadı.
+          </Text>
         </View>
       );
     }
@@ -493,8 +507,9 @@ export default function EvGuideScreen() {
     const estRange = !realRangeAvailable ? estimateRangeKm(merged) : null;
 
     return (
-      <View style={styles.detailContainer}>
-        {/* Başlık */}
+      <View style={styles.detailSheet}>
+        <View style={styles.detailHandle} />
+
         <View style={styles.detailHeader}>
           <View style={{ flex: 1 }}>
             <Text style={styles.detailBrand}>{merged.marka ?? '–'}</Text>
@@ -503,30 +518,29 @@ export default function EvGuideScreen() {
               {merged.varyant_norm ? ` • ${merged.varyant_norm}` : ''}
             </Text>
           </View>
+
           <TouchableOpacity
             onPress={() => setDetailVisible(false)}
             style={styles.detailCloseBtn}
           >
-            <Text style={styles.detailCloseText}>✕</Text>
+            <Ionicons name="close" size={20} color="#0F172A" />
           </TouchableOpacity>
         </View>
 
-        {detailLoading && (
-          <View style={{ paddingVertical: 12 }}>
-            <ActivityIndicator color="#2563eb" />
-            <Text style={styles.detailLoadingText}>Detaylar yükleniyor…</Text>
+        {detailLoading ? (
+          <View style={styles.detailLoadingWrap}>
+            <ActivityIndicator color="#2563EB" />
+            <Text style={styles.detailLoadingText}>Detaylar yükleniyor...</Text>
           </View>
-        )}
+        ) : null}
 
-        {/* Gövde scrollable */}
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={{ paddingBottom: 24 }}
+          contentContainerStyle={{ paddingBottom: 28 }}
           showsVerticalScrollIndicator={false}
         >
-          {/* Genel */}
-          <View style={styles.sectionBox}>
-            <Text style={styles.sectionTitle}>Genel</Text>
+          <View style={styles.detailSection}>
+            <Text style={styles.detailSectionTitle}>Genel</Text>
             <InfoRow label="WLTP" value={fmtWithUnit(merged.wltp_km, 'km')} />
             <InfoRow label="0–100 km/s" value={fmtWithUnit(merged.accel_0_100_s, 'sn')} />
             <InfoRow label="Azami hız" value={fmtWithUnit(merged.top_speed_kmh, 'km/s')} />
@@ -537,9 +551,8 @@ export default function EvGuideScreen() {
             <InfoRow label="Koltuk" value={formatNumber(merged.seats)} />
           </View>
 
-          {/* Batarya & Şarj */}
-          <View style={styles.sectionBox}>
-            <Text style={styles.sectionTitle}>Batarya & Şarj</Text>
+          <View style={styles.detailSection}>
+            <Text style={styles.detailSectionTitle}>Batarya & Şarj</Text>
             <InfoRow
               label="Batarya (net / brüt)"
               value={
@@ -573,9 +586,7 @@ export default function EvGuideScreen() {
             <InfoRow label="DC tepe güç" value={fmtWithUnit(merged.dc_max_kw, 'kW')} />
             <InfoRow
               label="10–80% DC süre"
-              value={
-                merged.dc_10_80_min != null ? fmtWithUnit(merged.dc_10_80_min, 'dk') : '–'
-              }
+              value={merged.dc_10_80_min != null ? fmtWithUnit(merged.dc_10_80_min, 'dk') : '–'}
             />
             <InfoRow
               label="Soket (AC / DC)"
@@ -593,19 +604,15 @@ export default function EvGuideScreen() {
             />
           </View>
 
-          {/* Menzil */}
-          <View style={styles.sectionBox}>
-            <Text style={styles.sectionTitle}>Menzil</Text>
+          <View style={styles.detailSection}>
+            <Text style={styles.detailSectionTitle}>Menzil</Text>
             {realRangeAvailable ? (
               <>
                 <InfoRow
                   label="Gerçek min–maks"
                   value={
                     r?.real
-                      ? `${formatNumber(r.real.min_km)} – ${fmtWithUnit(
-                          r.real.max_km,
-                          'km',
-                        )}`
+                      ? `${formatNumber(r.real.min_km)} – ${fmtWithUnit(r.real.max_km, 'km')}`
                       : '–'
                   }
                 />
@@ -626,9 +633,7 @@ export default function EvGuideScreen() {
               <>
                 <InfoRow
                   label="Tahmini menzil"
-                  value={
-                    estRange ? `~${estRange.toLocaleString('tr-TR')} km` : 'Veri yetersiz'
-                  }
+                  value={estRange ? `~${estRange.toLocaleString('tr-TR')} km` : 'Veri yetersiz'}
                 />
                 <InfoRow
                   label="Formül"
@@ -638,9 +643,8 @@ export default function EvGuideScreen() {
             )}
           </View>
 
-          {/* Boyut & Ağırlık */}
-          <View style={styles.sectionBox}>
-            <Text style={styles.sectionTitle}>Boyut & Ağırlık</Text>
+          <View style={styles.detailSection}>
+            <Text style={styles.detailSectionTitle}>Boyut & Ağırlık</Text>
             <InfoRow label="Uzunluk" value={fmtWithUnit(merged.length_mm, 'mm')} />
             <InfoRow label="Genişlik" value={fmtWithUnit(merged.width_mm, 'mm')} />
             <InfoRow label="Yükseklik" value={fmtWithUnit(merged.height_mm, 'mm')} />
@@ -652,9 +656,7 @@ export default function EvGuideScreen() {
               label="Bagaj (min/maks)"
               value={
                 merged.boot_l_min || merged.boot_l_max
-                  ? `${formatNumber(merged.boot_l_min)} / ${formatNumber(
-                      merged.boot_l_max,
-                    )} L`
+                  ? `${formatNumber(merged.boot_l_min)} / ${formatNumber(merged.boot_l_max)} L`
                   : '–'
               }
             />
@@ -672,23 +674,24 @@ export default function EvGuideScreen() {
             />
           </View>
 
-          {/* Kaynak */}
-          <View style={styles.sectionBox}>
-            <Text style={styles.sectionTitle}>Kaynak</Text>
+          <View style={styles.detailSection}>
+            <Text style={styles.detailSectionTitle}>Kaynak</Text>
             {merged.source_url ? (
-              <TouchableOpacity onPress={() => Linking.openURL(merged.source_url!)}>
-                <Text style={styles.linkText}>Kaynağı aç (EV Database / üretici)</Text>
+              <TouchableOpacity
+                style={styles.sourceButton}
+                onPress={() => Linking.openURL(merged.source_url!)}
+              >
+                <Ionicons name="open-outline" size={16} color="#2563EB" />
+                <Text style={styles.sourceButtonText}>Kaynağı aç</Text>
               </TouchableOpacity>
             ) : (
-              <Text style={styles.helper}>Bu kayıt için kaynak bağlantısı yok.</Text>
+              <Text style={styles.emptyText}>Bu kayıt için kaynak bağlantısı yok.</Text>
             )}
           </View>
 
-          {detailData?.error && (
-            <Text style={[styles.errorText, { marginTop: 8 }]}>
-              Not: {detailData.error}
-            </Text>
-          )}
+          {detailData?.error ? (
+            <Text style={styles.errorText}>Not: {detailData.error}</Text>
+          ) : null}
         </ScrollView>
       </View>
     );
@@ -702,12 +705,46 @@ export default function EvGuideScreen() {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.title}>Elektrikli Araç Rehberi</Text>
-        <Text style={styles.subtitle}>
-          Türkiye’de satılan elektrikli araçların batarya, menzil ve şarj hızlarını tek ekranda kıyasla.
-        </Text>
+        <LinearGradient
+          colors={['#F8FBFF', '#EEF5FF', '#F8FAFC']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.heroCard}
+        >
+          <View style={styles.heroBadge}>
+            <Ionicons name="flash-outline" size={14} color="#2563EB" />
+            <Text style={styles.heroBadgeText}>Elektrikli araç rehberi</Text>
+          </View>
 
-        <View style={styles.filterBox}>
+          <Text style={styles.heroTitle}>Elektrikli araçları daha kolay karşılaştır</Text>
+          <Text style={styles.heroSubtitle}>
+            Türkiye’de satılan elektrikli araçların batarya, menzil ve şarj özelliklerini
+            sade bir ekranda incele.
+          </Text>
+
+          <View style={styles.quickStatsRow}>
+            <View style={styles.quickStatCard}>
+              <Ionicons name="battery-charging-outline" size={18} color="#2563EB" />
+              <Text style={styles.quickStatTitle}>Batarya</Text>
+              <Text style={styles.quickStatText}>Net / brüt kapasiteyi gör</Text>
+            </View>
+
+            <View style={styles.quickStatCard}>
+              <Ionicons name="flash-outline" size={18} color="#2563EB" />
+              <Text style={styles.quickStatTitle}>Şarj</Text>
+              <Text style={styles.quickStatText}>AC ve DC değerlerini kıyasla</Text>
+            </View>
+          </View>
+        </LinearGradient>
+
+        <View style={styles.formCard}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Filtrele ve ara</Text>
+            <Text style={styles.sectionSubtitle}>
+              Marka, model veya teknik anahtar kelime ile EV modellerini listele.
+            </Text>
+          </View>
+
           <SelectBox
             label="Marka"
             value={brand}
@@ -723,9 +760,9 @@ export default function EvGuideScreen() {
             placeholder={
               brand
                 ? models.length
-                  ? 'Tüm modeller'
-                  : 'Bu markada model yok'
-                : 'Önce marka seç (opsiyonel)'
+                  ? 'Model seçin'
+                  : 'Bu markada model bulunamadı'
+                : 'Önce marka seçin'
             }
             options={brand ? models : []}
             disabled={!brand || models.length === 0}
@@ -734,122 +771,148 @@ export default function EvGuideScreen() {
           />
 
           <View style={styles.field}>
-            <Text style={styles.label}>Arama (opsiyonel)</Text>
-            <TextInput
-              placeholder={'Model, özellik: "LFP", "800V"...'}
-              style={styles.input}
-              value={search}
-              onChangeText={setSearch}
-            />
+            <Text style={styles.fieldLabel}>Arama (opsiyonel)</Text>
+            <View style={styles.searchInputBox}>
+              <View style={styles.searchIconWrap}>
+                <Ionicons name="search-outline" size={18} color="#2563EB" />
+              </View>
+              <TextInput
+                placeholder='Örn: LFP, 800V, 54 kWh'
+                placeholderTextColor="#94A3B8"
+                style={styles.searchInput}
+                value={search}
+                onChangeText={setSearch}
+              />
+            </View>
           </View>
 
           <TouchableOpacity
-            style={[styles.button, loadingList && { opacity: 0.7 }]}
-            activeOpacity={0.85}
+            style={[styles.searchButton, (!filterReady || loadingList) && styles.searchButtonDisabled]}
+            activeOpacity={0.92}
             onPress={onSearchList}
-            disabled={loadingList}
+            disabled={!filterReady || loadingList}
           >
             {loadingList ? (
-              <ActivityIndicator color="#ffffff" />
+              <ActivityIndicator color="#FFFFFF" />
             ) : (
-              <Text style={styles.buttonText}>EV modellerini listele</Text>
+              <>
+                <Ionicons name="flash-outline" size={18} color="#FFFFFF" />
+                <Text style={styles.searchButtonText}>EV modellerini listele</Text>
+              </>
             )}
           </TouchableOpacity>
 
-          {badgeText ? <Text style={styles.listInfo}>{badgeText}</Text> : null}
+          {badgeText ? <Text style={styles.helperText}>{badgeText}</Text> : null}
         </View>
 
-        {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
-
-        {loadingList && (
-          <View style={{ marginTop: 16 }}>
-            <ActivityIndicator color="#2563eb" />
-            <Text style={styles.helper}>EV listesi yükleniyor…</Text>
+        {errorMsg ? (
+          <View style={styles.errorCard}>
+            <Ionicons name="alert-circle-outline" size={18} color="#DC2626" />
+            <Text style={styles.errorCardText}>{errorMsg}</Text>
           </View>
-        )}
+        ) : null}
 
-        {!loadingList && items.length === 0 && !errorMsg && (
-          <Text style={styles.helper}>
-            Bir marka/model seçip ya da “Elettrica 54 kWh”, “LFP batarya”, “800V mimari” gibi
-            kelimelerle arama yaparak listelenen EV modelleri inceleyebilirsin.
-          </Text>
-        )}
+        {!loadingList && items.length === 0 && !errorMsg ? (
+          <View style={styles.emptyStateCard}>
+            <View style={styles.emptyStateIcon}>
+              <Ionicons name="car-sport-outline" size={22} color="#2563EB" />
+            </View>
+            <Text style={styles.emptyStateTitle}>Aramaya hazır</Text>
+            <Text style={styles.emptyStateText}>
+              Marka veya model seçerek ya da “LFP”, “800V”, “54 kWh” gibi aramalar yaparak
+              elektrikli araç listelerini görüntüleyebilirsin.
+            </Text>
+          </View>
+        ) : null}
 
-        {!loadingList && items.length > 0 && (
-          <View style={styles.cardsGrid}>
+        {loadingList ? (
+          <View style={styles.loadingSection}>
+            <ActivityIndicator color="#2563EB" />
+            <Text style={styles.loadingSectionText}>EV listesi yükleniyor...</Text>
+          </View>
+        ) : null}
+
+        {!loadingList && items.length > 0 ? (
+          <View style={styles.resultsSection}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Modeller</Text>
+              <Text style={styles.sectionSubtitle}>
+                Bir karta dokunarak detayları açabilirsin.
+              </Text>
+            </View>
+
             {items.map((it, idx) => {
               const badge = getRangeBadge(it);
+
               return (
                 <TouchableOpacity
                   key={`${it.marka}-${it.model}-${it.varyant_norm}-${idx}`}
-                  style={styles.card}
-                  activeOpacity={0.9}
+                  style={styles.resultCard}
+                  activeOpacity={0.92}
                   onPress={() => openDetail(it)}
                 >
-                  <View style={styles.cardHeader}>
-                    <Text style={styles.cardBrand}>{it.marka ?? '–'}</Text>
-                    <Text style={styles.cardTitle}>{it.model ?? '–'}</Text>
-                    {it.varyant_norm && (
-                      <Text style={styles.cardVariant}>{it.varyant_norm}</Text>
-                    )}
+                  <View style={styles.resultHeader}>
+                    <View style={{ flex: 1, paddingRight: 10 }}>
+                      <Text style={styles.resultBrand}>{it.marka ?? '–'}</Text>
+                      <Text style={styles.resultTitle}>{it.model ?? '–'}</Text>
+                      {it.varyant_norm ? (
+                        <Text style={styles.resultVariant}>{it.varyant_norm}</Text>
+                      ) : null}
+                    </View>
+
+                    {badge ? (
+                      <View
+                        style={[
+                          styles.rangeBadge,
+                          badge.label === 'Gerçek'
+                            ? styles.rangeBadgeReal
+                            : styles.rangeBadgeEstimated,
+                        ]}
+                      >
+                        <Text style={styles.rangeBadgeText}>
+                          {badge.label}: {badge.text}
+                        </Text>
+                      </View>
+                    ) : null}
                   </View>
 
-                  <View style={styles.kpiRow}>
-                    <KpiBox
+                  <View style={styles.statsRow}>
+                    <StatBox
                       label="WLTP"
                       value={it.wltp_km ? `${it.wltp_km} km` : '–'}
                     />
-                    <KpiBox
+                    <StatBox
                       label="Net batarya"
-                      value={
-                        it.battery_usable_kwh != null
-                          ? `${it.battery_usable_kwh} kWh`
-                          : '–'
-                      }
+                      value={it.battery_usable_kwh != null ? `${it.battery_usable_kwh} kWh` : '–'}
                     />
                   </View>
-                  <View style={styles.kpiRow}>
-                    <KpiBox
+
+                  <View style={styles.statsRow}>
+                    <StatBox
                       label="AC şarj"
                       value={it.ac_max_kw != null ? `${it.ac_max_kw} kW` : '–'}
                     />
-                    <KpiBox
+                    <StatBox
                       label="DC şarj"
                       value={it.dc_max_kw != null ? `${it.dc_max_kw} kW` : '–'}
                     />
                   </View>
 
-                  {badge && (
-                    <View
-                      style={[
-                        styles.badge,
-                        badge.label === 'Gerçek'
-                          ? styles.badgeReal
-                          : styles.badgeEstimated,
-                      ]}
-                    >
-                      <Text style={styles.badgeText}>
-                        {badge.label}: {badge.text}
-                      </Text>
+                  <View style={styles.metaRow}>
+                    <View style={styles.metaChip}>
+                      <Text style={styles.metaChipText}>{it.drivetrain ?? 'Aktarma: –'}</Text>
                     </View>
-                  )}
-
-                  <View style={styles.cardFooterRow}>
-                    <Text style={styles.cardFooterText}>
-                      {it.drivetrain ?? 'Aktarma: –'}
-                    </Text>
-                    <Text style={styles.cardFooterText}>
-                      {it.body ?? 'Gövde: –'}
-                    </Text>
+                    <View style={styles.metaChip}>
+                      <Text style={styles.metaChipText}>{it.body ?? 'Gövde: –'}</Text>
+                    </View>
                   </View>
                 </TouchableOpacity>
               );
             })}
           </View>
-        )}
+        ) : null}
       </ScrollView>
 
-      {/* Detay Modal */}
       <Modal
         visible={detailVisible}
         animationType="slide"
@@ -865,306 +928,595 @@ export default function EvGuideScreen() {
 const styles = StyleSheet.create({
   safe: {
     flex: 1,
-    backgroundColor: '#e5e7eb',
+    backgroundColor: '#F4F8FC',
   },
+
   scroll: {
     flex: 1,
   },
+
   content: {
-    padding: 16,
-    paddingBottom: 24,
+    paddingHorizontal: 18,
+    paddingTop: 12,
+    paddingBottom: 140,
   },
-  title: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: '#0f172a',
-  },
-  subtitle: {
-    marginTop: 6,
-    fontSize: 14,
-    color: '#4b5563',
-  },
-  filterBox: {
-    marginTop: 16,
-    padding: 12,
-    borderRadius: 16,
-    backgroundColor: '#ffffff',
+
+  heroCard: {
+    borderRadius: 28,
+    padding: 22,
     borderWidth: 1,
-    borderColor: '#d1d5db',
+    borderColor: '#E2E8F0',
+    marginBottom: 18,
+    overflow: 'hidden',
   },
-  field: {
-    marginTop: 12,
+
+  heroBadge: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFFD9',
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    marginBottom: 14,
   },
-  label: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: '#374151',
+
+  heroBadgeText: {
+    marginLeft: 6,
+    color: '#2563EB',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  heroTitle: {
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 8,
+  },
+
+  heroSubtitle: {
+    fontSize: 15,
+    lineHeight: 22,
+    color: '#475569',
+    marginBottom: 18,
+  },
+
+  quickStatsRow: {
+    flexDirection: 'row',
+    gap: 10,
+  } as any,
+
+  quickStatCard: {
+    flex: 1,
+    backgroundColor: '#FFFFFFD9',
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+
+  quickStatTitle: {
+    marginTop: 10,
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+
+  quickStatText: {
+    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#64748B',
+  },
+
+  formCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 16,
+  },
+
+  sectionHeader: {
+    marginBottom: 10,
+  },
+
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
     marginBottom: 4,
   },
-  input: {
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    fontSize: 14,
-    color: '#111827',
+
+  sectionSubtitle: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: '#64748B',
   },
-  selectBox: {
-    borderRadius: 10,
+
+  field: {
+    marginTop: 14,
+  },
+
+  fieldLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1E293B',
+    marginBottom: 8,
+  },
+
+  selectTrigger: {
+    minHeight: 56,
+    borderRadius: 18,
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: '#e5e7eb',
-    backgroundColor: '#ffffff',
-    paddingHorizontal: 10,
-    paddingVertical: 10,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  selectBoxDisabled: {
-    opacity: 0.6,
+
+  selectTriggerOpen: {
+    borderColor: '#93C5FD',
+    backgroundColor: '#FFFFFF',
   },
-  selectBoxValue: {
+
+  selectTriggerDisabled: {
+    opacity: 0.55,
+  },
+
+  selectValue: {
     flex: 1,
-    fontSize: 14,
-    color: '#111827',
+    fontSize: 15,
+    color: '#0F172A',
+    fontWeight: '500',
+    marginRight: 10,
   },
-  selectBoxPlaceholder: {
-    color: '#9ca3af',
+
+  selectPlaceholder: {
+    color: '#94A3B8',
+    fontWeight: '400',
   },
-  selectBoxChevron: {
-    marginLeft: 8,
-    fontSize: 12,
-    color: '#6b7280',
-  },
-  selectBoxLoading: {
+
+  selectLoadingRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  selectBoxLoadingText: {
-    fontSize: 13,
-    color: '#6b7280',
+
+  selectLoadingText: {
     marginLeft: 8,
-  },
-  optionsPanel: {
-    marginTop: 4,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    backgroundColor: '#ffffff',
-    overflow: 'hidden',
-  },
-  optionItem: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f3f4f6',
-  },
-  optionText: {
+    color: '#64748B',
     fontSize: 14,
-    color: '#111827',
   },
-  optionTextEmpty: {
-    fontSize: 13,
-    color: '#6b7280',
+
+  optionsPanel: {
+    marginTop: 6,
+    borderRadius: 18,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 4,
   },
-  button: {
-    marginTop: 14,
-    borderRadius: 12,
-    backgroundColor: '#2563eb',
+
+  optionsScroll: {
+    maxHeight: 220,
+  },
+
+  optionItem: {
+    minHeight: 50,
+    paddingHorizontal: 14,
     paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  optionItemActive: {
+    backgroundColor: '#EFF6FF',
+  },
+
+  optionText: {
+    fontSize: 15,
+    color: '#0F172A',
+    flex: 1,
+    marginRight: 10,
+  },
+
+  optionTextActive: {
+    color: '#2563EB',
+    fontWeight: '700',
+  },
+
+  emptyOption: {
+    paddingVertical: 16,
     alignItems: 'center',
   },
-  buttonText: {
-    color: '#ffffff',
-    fontWeight: '700',
+
+  emptyOptionText: {
+    fontSize: 14,
+    color: '#94A3B8',
+  },
+
+  searchInputBox: {
+    minHeight: 56,
+    borderRadius: 18,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  searchIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#EAF3FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  searchInput: {
+    flex: 1,
     fontSize: 15,
+    color: '#0F172A',
+    marginLeft: 10,
+    paddingVertical: Platform.OS === 'ios' ? 14 : 10,
   },
-  listInfo: {
-    marginTop: 8,
-    fontSize: 12,
-    color: '#6b7280',
+
+  searchButton: {
+    marginTop: 18,
+    minHeight: 56,
+    borderRadius: 18,
+    backgroundColor: '#2563EB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
   },
-  errorText: {
+
+  searchButtonDisabled: {
+    opacity: 0.58,
+  },
+
+  searchButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+    marginLeft: 8,
+  },
+
+  helperText: {
     marginTop: 10,
     fontSize: 12,
-    color: '#b91c1c',
+    color: '#64748B',
   },
-  helper: {
-    marginTop: 16,
-    fontSize: 12,
-    color: '#6b7280',
-  },
-  cardsGrid: {
-    marginTop: 18,
-    gap: 10,
-  } as any,
-  card: {
-    borderRadius: 16,
-    backgroundColor: '#ffffff',
+
+  errorCard: {
+    marginBottom: 16,
+    borderRadius: 18,
+    backgroundColor: '#FEF2F2',
     borderWidth: 1,
-    borderColor: '#e5e7eb',
-    padding: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 4,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    borderColor: '#FECACA',
+    padding: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  cardHeader: {
+
+  errorCardText: {
+    flex: 1,
+    marginLeft: 8,
+    color: '#DC2626',
+    fontSize: 14,
+    lineHeight: 19,
+  },
+
+  emptyStateCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 20,
+    alignItems: 'center',
+  },
+
+  emptyStateIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#EAF3FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+
+  emptyStateTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
     marginBottom: 8,
   },
-  cardBrand: {
+
+  emptyStateText: {
+    fontSize: 14,
+    lineHeight: 21,
+    color: '#64748B',
+    textAlign: 'center',
+  },
+
+  loadingSection: {
+    paddingVertical: 18,
+    alignItems: 'center',
+  },
+
+  loadingSectionText: {
+    marginTop: 10,
+    fontSize: 13,
+    color: '#64748B',
+  },
+
+  resultsSection: {
+    marginTop: 2,
+  },
+
+  resultCard: {
+    borderRadius: 22,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 16,
+    marginBottom: 12,
+  },
+
+  resultHeader: {
+    marginBottom: 12,
+  },
+
+  resultBrand: {
     fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
-    color: '#6b7280',
-    fontWeight: '600',
-  },
-  cardTitle: {
-    fontSize: 15,
+    color: '#64748B',
     fontWeight: '700',
-    color: '#111827',
+    marginBottom: 4,
   },
-  cardVariant: {
-    fontSize: 12,
-    color: '#4b5563',
-    marginTop: 2,
+
+  resultTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#0F172A',
   },
-  kpiRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 8,
+
+  resultVariant: {
+    marginTop: 4,
+    fontSize: 13,
+    color: '#64748B',
+    lineHeight: 18,
   },
-  kpiBox: {
-    flex: 1,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    backgroundColor: '#f9fafb',
-    paddingHorizontal: 8,
+
+  rangeBadge: {
+    marginTop: 10,
+    alignSelf: 'flex-start',
+    borderRadius: 999,
+    paddingHorizontal: 10,
     paddingVertical: 6,
   },
-  kpiLabel: {
-    fontSize: 11,
-    color: '#6b7280',
+
+  rangeBadgeReal: {
+    backgroundColor: '#DCFCE7',
   },
-  kpiValue: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#111827',
-    marginTop: 2,
+
+  rangeBadgeEstimated: {
+    backgroundColor: '#FEF3C7',
   },
-  badge: {
-    alignSelf: 'flex-start',
-    marginTop: 8,
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+
+  rangeBadgeText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#334155',
   },
-  badgeReal: {
-    backgroundColor: '#d1fae5',
-  },
-  badgeEstimated: {
-    backgroundColor: '#fef3c7',
-  },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#065f46',
-  },
-  cardFooterRow: {
-    marginTop: 8,
+
+  statsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: 10,
+    marginTop: 10,
+  } as any,
+
+  statBox: {
+    flex: 1,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    paddingHorizontal: 10,
+    paddingVertical: 10,
   },
-  cardFooterText: {
+
+  statLabel: {
     fontSize: 11,
-    color: '#6b7280',
+    color: '#64748B',
+    marginBottom: 4,
   },
+
+  statValue: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+
+  metaRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 12,
+  } as any,
+
+  metaChip: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#DBEAFE',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+
+  metaChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1D4ED8',
+  },
+
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(15,23,42,0.65)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: 'rgba(15, 23, 42, 0.34)',
+    justifyContent: 'flex-end',
   },
-  detailContainer: {
-    maxHeight: '90%',
-    width: '94%',
-    backgroundColor: '#ffffff',
-    borderRadius: 20,
-    paddingHorizontal: 16,
-    paddingTop: 14,
+
+  detailSheet: {
+    maxHeight: '88%',
+    backgroundColor: '#F8FAFC',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    paddingHorizontal: 18,
+    paddingTop: 10,
   },
+
+  detailHandle: {
+    width: 42,
+    height: 5,
+    borderRadius: 999,
+    backgroundColor: '#CBD5E1',
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+
   detailHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    gap: 12,
+  } as any,
+
   detailBrand: {
     fontSize: 11,
     textTransform: 'uppercase',
     letterSpacing: 0.8,
-    color: '#6b7280',
-    fontWeight: '600',
-  },
-  detailTitle: {
-    fontSize: 17,
+    color: '#64748B',
     fontWeight: '700',
-    color: '#111827',
-    marginTop: 2,
-  },
-  detailCloseBtn: {
-    marginLeft: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  detailCloseText: {
-    fontSize: 18,
-    color: '#6b7280',
-  },
-  detailLoadingText: {
-    marginTop: 6,
-    fontSize: 12,
-    color: '#4b5563',
-    textAlign: 'center',
-  },
-  sectionBox: {
-    marginTop: 10,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    backgroundColor: '#f9fafb',
-    padding: 10,
-  },
-  sectionTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#111827',
     marginBottom: 4,
   },
+
+  detailTitle: {
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+
+  detailCloseBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  detailLoadingWrap: {
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+
+  detailLoadingText: {
+    marginTop: 8,
+    fontSize: 13,
+    color: '#64748B',
+  },
+
+  detailSection: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 14,
+    marginBottom: 12,
+  },
+
+  detailSectionTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+    marginBottom: 10,
+  },
+
   infoRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 4,
-  },
+    alignItems: 'flex-start',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    gap: 12,
+  } as any,
+
   infoRowLabel: {
-    fontSize: 12,
-    color: '#4b5563',
-    flex: 1.1,
-    marginRight: 8,
-  },
-  infoRowValue: {
-    fontSize: 12,
-    color: '#111827',
-    fontWeight: '500',
     flex: 1,
+    fontSize: 13,
+    color: '#64748B',
+  },
+
+  infoRowValue: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
     textAlign: 'right',
   },
-  linkText: {
-    fontSize: 12,
-    color: '#2563eb',
-    textDecorationLine: 'underline',
+
+  sourceButton: {
+    minHeight: 46,
+    borderRadius: 14,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  sourceButtonText: {
+    marginLeft: 6,
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#2563EB',
+  },
+
+  emptyText: {
+    fontSize: 14,
+    lineHeight: 20,
+    color: '#64748B',
+  },
+
+  errorText: {
+    marginTop: 8,
+    fontSize: 13,
+    color: '#B91C1C',
+    lineHeight: 19,
   },
 });

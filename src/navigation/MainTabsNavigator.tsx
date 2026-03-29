@@ -1,4 +1,3 @@
-// src/navigation/MainTabsNavigator.tsx
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import Ionicons from 'react-native-vector-icons/Ionicons';
@@ -7,8 +6,6 @@ import HomeScreen from '../screens/HomeScreen';
 import KronikSorunScreen from '../screens/KronikSorunScreen';
 import EvGuideScreen from '../screens/EvGuideScreen';
 import AccountScreen from '../screens/AccountScreen';
-import FAQScreen from '../screens/FAQScreen';
-import AboutScreen from '../screens/AboutScreen';
 
 const Tab = createBottomTabNavigator();
 
@@ -19,13 +16,10 @@ export default function MainTabsNavigator() {
         headerShown: false,
         tabBarActiveTintColor: '#2563EB',
         tabBarInactiveTintColor: '#9CA3AF',
-        tabBarStyle:
-          route.name === 'FAQ' || route.name === 'About'
-            ? { display: 'none' }
-            : {
-                backgroundColor: '#FFFFFF',
-                borderTopColor: '#E5E7EB',
-              },
+        tabBarStyle: {
+          backgroundColor: '#FFFFFF',
+          borderTopColor: '#E5E7EB',
+        },
         tabBarIcon: ({
           color,
           size,
@@ -73,24 +67,6 @@ export default function MainTabsNavigator() {
         name="Account"
         component={AccountScreen}
         options={{ tabBarLabel: 'Hesabım' }}
-      />
-
-      <Tab.Screen
-        name="FAQ"
-        component={FAQScreen}
-        options={{
-          headerShown: false,
-          tabBarButton: () => null,
-        }}
-      />
-
-      <Tab.Screen
-        name="About"
-        component={AboutScreen}
-        options={{
-          headerShown: false,
-          tabBarButton: () => null,
-        }}
       />
     </Tab.Navigator>
   );
